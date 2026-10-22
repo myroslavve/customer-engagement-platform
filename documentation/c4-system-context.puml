@@ -1,0 +1,24 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+title Customer Engagement Platform - C4 System Context
+
+Person(marketer, "Marketing manager", "Creates email templates, configures audience and linear workflows, reviews activity.")
+Person(end_user, "End user", "Performs actions in the product and receives campaign emails.")
+
+System_Boundary(platform_boundary, "Customer Engagement Platform") {
+    System(platform, "Customer Engagement Platform", "Captures user activity, segments users, executes linear email workflows and records delivery activity.")
+}
+
+System_Ext(product, "Customer Product", "The application where end users sign up and perform actions such as viewing an item.")
+System_Ext(email_provider, "Email Delivery Provider", "Resend, SendGrid or AWS SES sandbox. Sends email and returns sent/failed status.")
+
+Rel(end_user, product, "Uses")
+Rel(product, platform, "POST /api/v1/identify and /api/v1/track", "HTTPS/JSON")
+Rel(platform, product, "Returns ingestion status", "HTTPS/JSON")
+
+Rel(marketer, platform, "Creates templates, triggers and audience rules; views activity log", "HTTPS via admin UI")
+Rel(platform, email_provider, "Renders and dispatches email; receives delivery result", "HTTPS API")
+Rel(email_provider, end_user, "Delivers campaign email", "Email")
+@enduml

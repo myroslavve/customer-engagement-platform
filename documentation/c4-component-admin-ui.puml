@@ -1,0 +1,40 @@
+@startuml
+!include <C4/C4_Component>
+
+title Customer Engagement Platform - Admin UI - C4 Component (L3)
+
+AddBoundaryTag("ui", $borderColor="#1565C0", $fontColor="#1565C0", $borderThickness="2", $legendText="admin UI boundary")
+AddComponentTag("page", $bgColor="#42A5F5", $borderColor="#1565C0", $fontColor="#ffffff", $legendText="admin page component")
+
+Person(marketer, "Marketing manager", "Creates templates, audiences and workflows; reviews activity.")
+Container_Ext(api, "API Server", "Node.js REST API", "Admin API protected by JWT authentication.")
+
+Container_Boundary(adminUi, "Admin UI - React SPA", $tags="ui") {
+  Component(authPage, "Authentication Page", "React page", "Signs in the marketer and establishes the JWT session.", $tags="page")
+  Component(templatesPage, "Templates Page", "React page", "Creates and edits email subjects, bodies and dynamic variables.", $tags="page")
+  Component(audiencesPage, "Audiences Page", "React page", "Defines simple audience conditions and previews matching users.", $tags="page")
+  Component(workflowsPage, "Workflows Page", "React page", "Defines and publishes the linear Trigger -> Delay -> Send workflow.", $tags="page")
+  Component(activityPage, "Activity Page", "React page", "Displays workflow runs, message statuses, timestamps and failures.", $tags="page")
+  Component(apiClient, "Admin API Client", "TypeScript service", "Sends authenticated REST/JSON requests to the API Server.")
+}
+
+Rel(marketer, authPage, "Signs in", "Browser")
+Rel(marketer, templatesPage, "Manages templates", "Browser")
+Rel(marketer, audiencesPage, "Manages audiences", "Browser")
+Rel(marketer, workflowsPage, "Manages workflows", "Browser")
+Rel(marketer, activityPage, "Reviews activity", "Browser")
+Rel(authPage, apiClient, "Authenticates")
+Rel(templatesPage, apiClient, "Template requests")
+Rel(audiencesPage, apiClient, "Audience requests")
+Rel(workflowsPage, apiClient, "Workflow requests")
+Rel(activityPage, apiClient, "Activity requests")
+Rel(apiClient, api, "Admin API calls", "REST/JSON, JWT")
+
+Lay_R(authPage, templatesPage)
+Lay_R(templatesPage, audiencesPage)
+Lay_R(audiencesPage, workflowsPage)
+Lay_R(workflowsPage, activityPage)
+Lay_D(templatesPage, apiClient)
+
+SHOW_LEGEND()
+@enduml

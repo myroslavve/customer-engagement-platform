@@ -1,0 +1,54 @@
+@startuml C4_L3_API_Server
+!include <C4/C4_Component>
+
+title Customer Engagement Platform - API Server - C4 Component (L3)
+
+AddBoundaryTag("public", $borderColor="#2E7D32", $fontColor="#2E7D32", $borderThickness="2", $legendText="public ingestion boundary")
+AddBoundaryTag("admin", $borderColor="#1565C0", $fontColor="#1565C0", $borderThickness="2", $legendText="admin boundary")
+AddComponentTag("ingest", $bgColor="#43A047", $borderColor="#2E7D32", $fontColor="#ffffff", $legendText="ingestion component")
+
+System_Ext(product, "Customer Product", "Its backend calls identify / track on user actions.")
+Container_Ext(adminUi, "Admin UI", "React SPA", "Used by the marketing manager.")
+
+Container_Boundary(api, "API Server") {
+
+  Boundary(publicApi, "Public Ingestion API", "/api/v1/*  |  API key auth", $tags="public") {
+    Component(ingestMod, "Ingestion Module", "NestJS module", "POST /api/v1/identify\nPOST /api/v1/track\n\nValidates payload, dedupes by messageId, upserts profile, stores event.", $tags="ingest")
+    Component(producer, "Queue Producer", "BullMQ Queue", "Adds process-event jobs to the 'events' queue for the Worker.", $tags="ingest")
+  }
+
+  Boundary(adminApi, "Admin API", "/admin/*  |  JWT auth", $tags="admin") {
+    Component(authMod, "Auth Module", "NestJS module", "Accounts, admin login, API key management.")
+    Component(templatesMod, "Templates Module", "NestJS module", "Email templates with {{variables}}.")
+    Component(audiencesMod, "Audiences Module", "NestJS module", "Segment rules; preview count.")
+    Component(workflowsMod, "Workflows Module", "NestJS module", "Build, validate, publish versions, pause/resume.")
+    Component(activityMod, "Activity Module", "NestJS module", "Events, runs, messages; per-user timeline.")
+  }
+}
+
+ContainerDb(redis, "Redis", "BullMQ", "Queues, idempotency keys")
+ContainerDb(pg, "Database", "PostgreSQL", "All platform data")
+
+' ---- layout hints ----
+Lay_R(product, adminUi)
+Lay_R(publicApi, adminApi)
+Lay_D(ingestMod, producer)
+Lay_R(authMod, templatesMod)
+Lay_R(templatesMod, audiencesMod)
+Lay_D(authMod, workflowsMod)
+Lay_R(workflowsMod, activityMod)
+Lay_R(redis, pg)
+
+' ---- ingestion path ----
+Rel(product, ingestMod, "identify / track", "REST/JSON, API key")
+Rel(ingestMod, producer, "process-event(eventId)")
+Rel(ingestMod, pg, "Profiles, events", "SQL")
+Rel(ingestMod, redis, "Idempotency key")
+Rel(producer, redis, "queue.add(job)", "BullMQ")
+
+' ---- admin path ----
+Rel(adminUi, adminApi, "Admin calls", "REST/JSON, JWT")
+Rel(adminApi, pg, "Reads / writes config & activity", "SQL")
+
+SHOW_LEGEND()
+@enduml

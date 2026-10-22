@@ -1,0 +1,140 @@
+@startuml C4_L4_Worker
+title Customer Engagement Platform - Worker - Code (L4)
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+package "event processing" {
+  class EventsProcessor <<BullMQ worker 'events'>> {
+    +process(job: ProcessEventJob): Promise<void>
+  }
+  class TriggerService {
+    +startMatchingRuns(event: UserEvent): Promise<void>
+  }
+  class WaitingRunService {
+    +resumeWaitingRuns(event: UserEvent): Promise<void>
+  }
+}
+
+package "workflow execution" {
+  class StepsProcessor <<BullMQ worker 'workflow-steps'>> {
+    +process(job: StepJob): Promise<void>
+  }
+  class WorkflowRunner {
+    +run(runId: string, nodeId: string): Promise<void>
+  }
+  interface StepExecutor {
+    +execute(node: WorkflowNode, ctx: RunContext): Promise<StepResult>
+  }
+  class BranchStepExecutor
+  class DelayStepExecutor
+  class WaitForEventStepExecutor
+  class SendEmailStepExecutor
+  class ExitStepExecutor
+}
+
+package "messaging" {
+  class EmailSendProcessor <<BullMQ worker 'email-send'>> {
+    +process(job: EmailSendJob): Promise<void>
+  }
+  class EmailService {
+    +send(job: EmailSendJob): Promise<void>
+  }
+  class TemplateRenderer {
+    +render(template: Template, vars: object): RenderedEmail
+  }
+  interface EmailProvider {
+    +send(email: RenderedEmail): Promise<SendResult>
+  }
+  class ResendEmailProvider
+}
+
+package "shared" {
+  class ConditionEvaluator {
+    +evaluate(condition: Condition, ctx: RunContext): boolean
+  }
+  class QueueProducer {
+    +enqueueStep(job: StepJob, delayMs?: number): Promise<void>
+    +enqueueEmail(job: EmailSendJob): Promise<void>
+  }
+  class WorkflowRepository {
+    +findActiveByTrigger(eventName: string): Promise<WorkflowVersion[]>
+    +getVersion(versionId: string): Promise<WorkflowVersion>
+  }
+  class RunRepository {
+    +create(run: object): Promise<WorkflowRun>
+    +findById(runId: string): Promise<WorkflowRun>
+    +findWaiting(profileId: string, eventName: string): Promise<WorkflowRun[]>
+    +claim(runId: string, nodeId: string): Promise<boolean>
+    +save(run: WorkflowRun): Promise<void>
+  }
+  class ProfileRepository {
+    +findById(profileId: string): Promise<UserProfile>
+  }
+  class MessageRepository {
+    +create(message: object): Promise<Message>
+    +updateStatus(id: string, status: string): Promise<void>
+  }
+}
+
+class Redis <<BullMQ / Redis>>
+class Database <<PostgreSQL>>
+class EmailDeliveryProvider <<external API>>
+
+' ---- event processing ----
+Redis --> EventsProcessor : process-event jobs
+EventsProcessor --> TriggerService : new event
+EventsProcessor --> WaitingRunService : new event
+TriggerService --> WorkflowRepository : find workflows by trigger
+TriggerService --> ConditionEvaluator : check entry filter
+TriggerService --> RunRepository : create run
+TriggerService --> QueueProducer : enqueue first step
+WaitingRunService --> RunRepository : find + claim waiting runs
+WaitingRunService --> QueueProducer : enqueue next step
+
+' ---- workflow execution ----
+Redis --> StepsProcessor : step jobs (incl. delayed)
+StepsProcessor --> WorkflowRunner
+WorkflowRunner --> RunRepository : load / claim / save run
+WorkflowRunner --> WorkflowRepository : load version graph
+WorkflowRunner --> StepExecutor : execute current node
+StepExecutor <|.. BranchStepExecutor
+StepExecutor <|.. DelayStepExecutor
+StepExecutor <|.. WaitForEventStepExecutor
+StepExecutor <|.. SendEmailStepExecutor
+StepExecutor <|.. ExitStepExecutor
+BranchStepExecutor --> ConditionEvaluator
+DelayStepExecutor --> QueueProducer : delayed step
+WaitForEventStepExecutor --> QueueProducer : timeout step
+SendEmailStepExecutor --> QueueProducer : email job
+
+' ---- messaging ----
+Redis --> EmailSendProcessor : email-send jobs (retries)
+EmailSendProcessor --> EmailService
+EmailService --> ProfileRepository : recipient + vars
+EmailService --> TemplateRenderer
+EmailService --> EmailProvider
+EmailService --> MessageRepository : sent / failed
+EmailProvider <|.. ResendEmailProvider
+ResendEmailProvider --> EmailDeliveryProvider : HTTPS API
+
+' ---- infrastructure ----
+QueueProducer -[norank]-> Redis : queue.add()
+WorkflowRepository --> Database
+RunRepository --> Database
+ProfileRepository --> Database
+MessageRepository --> Database
+
+note right of RunRepository
+  claim() is an atomic conditional update:
+  only one of "event arrived" / "timeout"
+  can continue a waiting run
+end note
+
+
+' ---- layout hints ----
+StepsProcessor -[hidden]l- EventsProcessor
+EmailSendProcessor -[hidden]l- StepsProcessor
+@enduml

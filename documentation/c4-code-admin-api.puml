@@ -1,0 +1,166 @@
+@startuml
+
+title Customer Engagement Platform - Admin API - Code (L4)
+
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+class Database <<PostgreSQL>> {
+  +query(sql: string): Promise<object[]>
+}
+
+package "Admin API" {
+  class JwtAuthGuard {
+    +canActivate(request: object): Promise<boolean>
+  }
+
+  class AuthController {
+    +login(request: object): Promise<object>
+    +createApiKey(request: object): Promise<object>
+    +revokeApiKey(keyId: string): Promise<void>
+  }
+
+  class AuthService {
+    +login(request: object): Promise<object>
+    +createApiKey(request: object): Promise<object>
+    +revokeApiKey(keyId: string): Promise<void>
+  }
+
+  class TemplateController {
+    +list(): Promise<object[]>
+    +create(input: object): Promise<object>
+    +update(id: string, input: object): Promise<object>
+    +delete(id: string): Promise<void>
+  }
+
+  class TemplateService {
+    +list(): Promise<object[]>
+    +create(input: object): Promise<object>
+    +update(id: string, input: object): Promise<object>
+    +delete(id: string): Promise<void>
+  }
+
+  class AudienceController {
+    +list(): Promise<object[]>
+    +create(input: object): Promise<object>
+    +preview(rule: object): Promise<number>
+  }
+
+  class AudienceService {
+    +list(): Promise<object[]>
+    +create(input: object): Promise<object>
+    +preview(rule: object): Promise<number>
+  }
+
+  class WorkflowController {
+    +list(): Promise<object[]>
+    +create(input: object): Promise<object>
+    +publish(id: string): Promise<object>
+    +pause(id: string): Promise<void>
+    +resume(id: string): Promise<void>
+  }
+
+  class WorkflowService {
+    +list(): Promise<object[]>
+    +create(input: object): Promise<object>
+    +validate(input: object): boolean
+    +publish(id: string): Promise<object>
+    +pause(id: string): Promise<void>
+    +resume(id: string): Promise<void>
+  }
+
+  class ActivityController {
+    +list(filter: object): Promise<object[]>
+    +userTimeline(userId: string): Promise<object[]>
+  }
+
+  class ActivityService {
+    +list(filter: object): Promise<object[]>
+    +userTimeline(userId: string): Promise<object[]>
+  }
+
+  class AccountRepository {
+    +findByEmail(email: string): Promise<object>
+    +save(account: object): Promise<object>
+  }
+
+  class ApiKeyRepository {
+    +create(accountId: string): Promise<object>
+    +revoke(keyId: string): Promise<void>
+  }
+
+  class TemplateRepository {
+    +list(): Promise<object[]>
+    +save(template: object): Promise<object>
+    +delete(id: string): Promise<void>
+  }
+
+  class AudienceRepository {
+    +list(): Promise<object[]>
+    +save(audience: object): Promise<object>
+  }
+
+  class WorkflowRepository {
+    +list(): Promise<object[]>
+    +save(workflow: object): Promise<object>
+    +publish(id: string): Promise<object>
+    +updateStatus(id: string, status: string): Promise<void>
+  }
+
+  class ActivityRepository {
+    +list(filter: object): Promise<object[]>
+    +findByUser(userId: string): Promise<object[]>
+  }
+
+  JwtAuthGuard --> AuthService
+  AuthController --> AuthService
+  TemplateController --> TemplateService
+  AudienceController --> AudienceService
+  WorkflowController --> WorkflowService
+  ActivityController --> ActivityService
+  AuthService --> AccountRepository
+  AuthService --> ApiKeyRepository
+  TemplateService --> TemplateRepository
+  AudienceService --> AudienceRepository
+  WorkflowService --> WorkflowRepository
+  ActivityService --> ActivityRepository
+  AccountRepository --> Database
+  ApiKeyRepository --> Database
+  TemplateRepository --> Database
+  AudienceRepository --> Database
+  WorkflowRepository --> Database
+  ActivityRepository --> Database
+
+  JwtAuthGuard -[hidden]right-> AuthController
+  AuthController -[hidden]right-> AuthService
+  AuthService -[hidden]right-> TemplateController
+  TemplateController -[hidden]right-> TemplateService
+  TemplateService -[hidden]down-> WorkflowService
+  AudienceController -[hidden]right-> AudienceService
+  AudienceService -[hidden]right-> WorkflowController
+  WorkflowController -[hidden]right-> WorkflowService
+  WorkflowService -[hidden]right-> ActivityController
+  ActivityController -[hidden]right-> ActivityService
+  ActivityService -[hidden]right-> AccountRepository
+  AccountRepository -[hidden]right-> ApiKeyRepository
+  ApiKeyRepository -[hidden]right-> TemplateRepository
+  TemplateRepository -[hidden]right-> AudienceRepository
+  AudienceRepository -[hidden]right-> WorkflowRepository
+  WorkflowRepository -[hidden]right-> ActivityRepository
+  JwtAuthGuard -[hidden]down-> AudienceController
+  WorkflowService -[hidden]down-> ApiKeyRepository
+  WorkflowRepository -[hidden]down-> ActivityRepository
+}
+
+note right of AuthService
+  Admin API uses JWT authentication.
+end note
+
+note right of WorkflowService
+  Workflow lifecycle:
+  draft -> published -> paused
+  published -> active -> paused
+end note
+
+@enduml

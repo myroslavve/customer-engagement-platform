@@ -1,0 +1,32 @@
+@startuml C4_L3_Worker
+!include <C4/C4_Component>
+
+LAYOUT_TOP_DOWN()
+title Customer Engagement Platform - Worker - C4 Component (L3)
+
+ContainerDb(redis, "Redis", "BullMQ", "Queues: events, workflow-steps, email-send")
+ContainerDb(pg, "Database", "PostgreSQL", "Profiles, events, workflow versions, runs, steps, messages")
+System_Ext(email, "Email Delivery Provider", "Resend / SendGrid / SES")
+
+Container_Boundary(worker, "Worker") {
+  Component(eventsMod, "Event Processing Module", "BullMQ worker: 'events'", "Matches events to workflow triggers and starts runs; resumes runs waiting for this event.")
+  Component(execMod, "Workflow Execution Module", "BullMQ worker: 'workflow-steps'", "Executes run steps: branch, delay, wait-for-event (with timeout), send email, exit. Evaluates conditions, records steps.")
+  Component(msgMod, "Messaging Module", "BullMQ worker: 'email-send'", "Renders templates, checks unsubscribe, sends via provider adapter; retries with backoff, rate limited.")
+  Component(producer, "Queue Producer", "BullMQ Queue", "Adds immediate and delayed jobs (delays, wait timeouts, email sends).")
+}
+
+Rel(redis, eventsMod, "process-event jobs")
+Rel(redis, execMod, "step jobs (immediate / delayed)")
+Rel(redis, msgMod, "email-send jobs")
+
+Rel(eventsMod, producer, "First step / resumed step")
+Rel(execMod, producer, "Next step, delay, wait timeout, email-send")
+Rel(producer, redis, "queue.add(job, {delay})", "BullMQ")
+
+Rel(eventsMod, pg, "Reads workflows, profiles; creates / claims runs", "SQL")
+Rel(execMod, pg, "Reads versions; writes run state + steps", "SQL")
+Rel(msgMod, pg, "Reads templates, profile; writes message log", "SQL")
+Rel(msgMod, email, "Sends email; gets sent/failed", "HTTPS API")
+
+SHOW_LEGEND()
+@enduml

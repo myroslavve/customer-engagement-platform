@@ -1,0 +1,84 @@
+@startuml
+
+title Customer Engagement Platform - Ingestion API - Code (L4)
+
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+class Database <<PostgreSQL>> {
+  +query(sql: string): Promise<object[]>
+}
+
+class Redis <<BullMQ / Redis>> {
+  +set(key: string, value: string): Promise<void>
+  +get(key: string): Promise<string>
+}
+
+package "Public Ingestion API" {
+  class IdentifyController {
+    +identify(request: object): Promise<object>
+  }
+
+  class TrackController {
+    +track(request: object): Promise<object>
+  }
+
+  class IngestionService {
+    +identify(request: object): Promise<object>
+    +track(request: object): Promise<object>
+  }
+
+  class PayloadValidator {
+    +validateIdentify(request: object): void
+    +validateTrack(request: object): void
+  }
+
+  class IdempotencyService {
+    +hasProcessed(messageId: string): Promise<boolean>
+    +markProcessed(messageId: string): Promise<void>
+  }
+
+  class ProfileRepository {
+    +upsert(profile: object): Promise<void>
+    +findById(userId: string): Promise<object>
+  }
+
+  class EventRepository {
+    +create(event: object): Promise<object>
+  }
+
+  class QueueProducer {
+    +publishProcessEvent(eventId: string): Promise<void>
+  }
+
+  IdentifyController --> IngestionService
+  TrackController --> IngestionService
+  IngestionService --> PayloadValidator
+  IngestionService --> IdempotencyService
+  IngestionService --> ProfileRepository
+  IngestionService --> EventRepository
+  IngestionService --> QueueProducer
+  IdempotencyService --> Redis
+  ProfileRepository --> Database
+  EventRepository --> Database
+  QueueProducer --> Redis : queue.add("process-event")
+
+  IdentifyController -[hidden]right-> TrackController
+  TrackController -[hidden]right-> IngestionService
+  IngestionService -[hidden]right-> PayloadValidator
+  IdentifyController -[hidden]down-> IdempotencyService
+  IdempotencyService -[hidden]right-> ProfileRepository
+  ProfileRepository -[hidden]right-> EventRepository
+  EventRepository -[hidden]right-> QueueProducer
+}
+
+note right of IngestionService
+  POST /api/v1/identify
+  POST /api/v1/track
+
+  Validate -> dedupe -> persist ->
+  enqueue process-event
+end note
+
+@enduml

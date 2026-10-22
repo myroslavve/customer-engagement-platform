@@ -1,0 +1,91 @@
+@startuml
+
+title Customer Engagement Platform - Admin UI - Code (L4)
+
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+class ApiServer <<external REST API>> {
+  +adminEndpoints()
+}
+
+package "pages" {
+  class LoginPage {
+    +submit(credentials: object): Promise<void>
+  }
+
+  class TemplatesPage {
+    +loadTemplates(): Promise<void>
+    +saveTemplate(input: object): Promise<void>
+    +deleteTemplate(id: string): Promise<void>
+  }
+
+  class AudiencesPage {
+    +loadAudiences(): Promise<void>
+    +previewAudience(rule: object): Promise<number>
+    +saveAudience(input: object): Promise<void>
+  }
+
+  class WorkflowsPage {
+    +loadWorkflows(): Promise<void>
+    +validateWorkflow(input: object): boolean
+    +publishWorkflow(input: object): Promise<void>
+  }
+
+  class ActivityPage {
+    +loadActivity(filter: object): Promise<void>
+  }
+}
+
+package "api" {
+  interface AdminApiClient {
+    +login(request: object): Promise<object>
+    +listTemplates(): Promise<object[]>
+    +saveTemplate(input: object): Promise<object>
+    +listAudiences(): Promise<object[]>
+    +previewAudience(rule: object): Promise<number>
+    +saveAudience(input: object): Promise<object>
+    +listWorkflows(): Promise<object[]>
+    +publishWorkflow(input: object): Promise<object>
+    +getActivity(filter: object): Promise<object[]>
+  }
+
+  class HttpAdminApiClient {
+    -baseUrl: string
+    -jwt: string
+    +login(request: object): Promise<object>
+    +listTemplates(): Promise<object[]>
+    +saveTemplate(input: object): Promise<object>
+    +listAudiences(): Promise<object[]>
+    +previewAudience(rule: object): Promise<number>
+    +saveAudience(input: object): Promise<object>
+    +listWorkflows(): Promise<object[]>
+    +publishWorkflow(input: object): Promise<object>
+    +getActivity(filter: object): Promise<object[]>
+    -request<T>(method: string, path: string, body?: object): Promise<T>
+  }
+
+  AdminApiClient <|.. HttpAdminApiClient
+}
+
+LoginPage --> AdminApiClient : authenticates
+TemplatesPage --> AdminApiClient : template requests
+AudiencesPage --> AdminApiClient : audience requests
+WorkflowsPage --> AdminApiClient : workflow requests
+ActivityPage --> AdminApiClient : activity requests
+HttpAdminApiClient --> ApiServer : REST/JSON, JWT
+
+LoginPage -[hidden]down-> ActivityPage
+TemplatesPage -[hidden]down-> WorkflowsPage
+
+note right of HttpAdminApiClient
+  Maps UI operations to the Admin API:
+  POST /admin/login
+  GET/POST /admin/templates
+  GET/POST /admin/audiences
+  GET/POST /admin/workflows
+  GET /admin/activity
+end note
+
+@enduml
