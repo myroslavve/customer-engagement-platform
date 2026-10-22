@@ -22,4 +22,28 @@ This directory contains the API and its infrastructure integration. Worker imple
 
 Health: `GET http://localhost:3000/health`.
 
-Ingestion requests use `x-api-key` and are sent to `POST /api/v1/identify` or `POST /api/v1/track`. Both return an event ID after persistence and queue publication.
+Ingestion requests use `x-api-key` and are sent to `POST /api/v1/identify` or `POST /api/v1/track`. Both return `202 Accepted` only after profile/event persistence and `process-event` queue publication.
+
+Example identify request:
+
+```json
+{
+  "userId": "user-123",
+  "email": "person@example.com",
+  "traits": { "plan": "pro" },
+  "messageId": "msg-123"
+}
+```
+
+Example track request:
+
+```json
+{
+  "userId": "user-123",
+  "eventName": "item_viewed",
+  "properties": { "itemId": "item-456" },
+  "messageId": "msg-124"
+}
+```
+
+The service follows the documented sequence: validate the request, claim the `messageId` in Redis for 24 hours, transactionally upsert the profile and event in PostgreSQL, then publish `process-event` to the `events` BullMQ queue. A duplicate `messageId` returns `409 Conflict`; failed persistence or queue publication releases the Redis claim so the caller can retry.

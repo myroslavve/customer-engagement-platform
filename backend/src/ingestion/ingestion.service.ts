@@ -26,21 +26,36 @@ export class IngestionService {
       throw new ConflictException('messageId has already been processed');
     }
 
-    const profile = await this.database.query<{ id: string }>(
-      `INSERT INTO profiles (external_id, email, traits)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (external_id) DO UPDATE SET email = COALESCE(EXCLUDED.email, profiles.email),
-         traits = profiles.traits || EXCLUDED.traits, updated_at = NOW()
-       RETURNING id`,
-      [input.userId, input.email ?? null, JSON.stringify(input.traits ?? {})]
-    );
-    const event = await this.database.query<{ id: string }>(
-      `INSERT INTO events (profile_id, message_id, event_type, payload, occurred_at)
-       VALUES ($1, $2, $3, $4, COALESCE($5, NOW()))
-       RETURNING id`,
-      [profile.rows[0].id, input.messageId, type, JSON.stringify(input), input.timestamp ?? null]
-    );
-    await this.queue.publishProcessEvent(event.rows[0].id);
-    return { accepted: true, eventId: event.rows[0].id };
+    try {
+      const eventId = await this.database.transaction(async (client) => {
+        const profile = await client.query<{ id: string }>(
+          `INSERT INTO profiles (external_id, email, traits)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (external_id) DO UPDATE SET email = COALESCE(EXCLUDED.email, profiles.email),
+             traits = profiles.traits || EXCLUDED.traits, updated_at = NOW()
+           RETURNING id`,
+          [input.userId, input.email ?? null, JSON.stringify(input.traits ?? {})]
+        );
+        const event = await client.query<{ id: string }>(
+          `INSERT INTO events (profile_id, message_id, event_type, payload, occurred_at)
+           VALUES ($1, $2, $3, $4, COALESCE($5, NOW()))
+           ON CONFLICT (message_id) DO UPDATE SET message_id = EXCLUDED.message_id
+           RETURNING id`,
+          [
+            profile.rows[0].id,
+            input.messageId,
+            type,
+            JSON.stringify(input),
+            input.timestamp ?? null
+          ]
+        );
+        return event.rows[0].id;
+      });
+      await this.queue.publishProcessEvent(eventId);
+      return { accepted: true, eventId };
+    } catch (error) {
+      await this.redis.client.del(key);
+      throw error;
+    }
   }
 }
