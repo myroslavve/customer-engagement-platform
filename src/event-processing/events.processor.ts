@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { AppConfig } from '../config/app-config';
@@ -38,5 +38,15 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
 
     await this.triggers.startMatchingRuns(event, profile);
     await this.waitingRuns.resumeWaitingRuns(event, profile);
+  }
+
+  /** Fires on every failed attempt; BullMQ keeps only the final state, so log each one here. */
+  @OnWorkerEvent('failed')
+  onFailed(job: Job<ProcessEventJob> | undefined, error: Error): void {
+    const attempts = job ? `attempt ${job.attemptsMade}/${job.opts.attempts ?? 1}` : 'unknown job';
+    this.logger.error(
+      `process-event ${job?.id} failed (${attempts}): ${error.message}`,
+      error.stack,
+    );
   }
 }
