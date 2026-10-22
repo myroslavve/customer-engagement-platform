@@ -22,3 +22,4 @@ If ports 5432/6379 are taken on your machine, set `POSTGRES_PORT`/`REDIS_PORT` i
 - `npm run start:worker` / `npm run start:worker:dev` — run the Worker (BullMQ consumers)
 - `npm run migration:run` / `migration:revert` / `migration:generate -- src/database/migrations/<Name>`
 - `npm run lint`, `npm run format`, `npm test`
+- `npm run enqueue:event -- <eventId>` — add a `process-event` job for an existing events row (local testing)
