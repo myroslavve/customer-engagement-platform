@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "",
   "scripts": {
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "build": "nest build",
     "start:worker": "nest start",
     "start:worker:dev": "nest start --watch",
@@ -12,7 +12,11 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/data-source.ts",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/database/data-source.ts",
-    "enqueue:event": "ts-node scripts/enqueue-event.ts"
+    "enqueue:event": "ts-node scripts/enqueue-event.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "format:check": "prettier --check \"src/**/*.ts\" \"scripts/**/*.ts\"",
+    "start:worker:prod": "node dist/main.worker.js",
+    "migration:run:prod": "typeorm migration:run -d dist/database/data-source.js"
   },
   "repository": {
     "type": "git",
