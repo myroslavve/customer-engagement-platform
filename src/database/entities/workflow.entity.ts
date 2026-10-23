@@ -1,4 +1,5 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity } from 'typeorm';
+import { AbstractEntity } from './abstract.entity';
 
 export enum WorkflowStatus {
   Draft = 'draft',
@@ -7,8 +8,7 @@ export enum WorkflowStatus {
 }
 
 @Entity({ name: 'workflows' })
-export class Workflow {
-  @PrimaryGeneratedColumn('uuid') id: string;
+export class Workflow extends AbstractEntity {
   @Column('uuid') accountId: string;
   @Column('text') name: string;
   @Column({
@@ -19,6 +19,4 @@ export class Workflow {
   })
   status: WorkflowStatus;
   @Column({ type: 'uuid', nullable: true }) publishedVersionId: string | null;
-  @Column({ type: 'timestamptz', default: () => 'now()' }) createdAt: Date;
-  @Column({ type: 'timestamptz', default: () => 'now()' }) updatedAt: Date;
 }

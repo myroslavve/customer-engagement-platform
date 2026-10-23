@@ -76,7 +76,7 @@ export class RunRepository {
     const result = await this.runs
       .createQueryBuilder()
       .update(WorkflowRun)
-      .set({ status: RunStatus.Running, claimKey, updatedAt: () => 'now()' })
+      .set({ status: RunStatus.Running, claimKey })
       .where(
         'id = :runId AND current_node_id = :nodeId AND (status = :waiting OR claim_key = :claimKey)',
         { runId, nodeId, waiting: RunStatus.Waiting, claimKey },
@@ -86,7 +86,6 @@ export class RunRepository {
   }
 
   async save(run: WorkflowRun): Promise<void> {
-    run.updatedAt = new Date();
     await this.runs.save(run);
   }
 }

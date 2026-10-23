@@ -1,8 +1,7 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity } from 'typeorm';
+import { AbstractEntity } from './abstract.entity';
 
 @Entity({ name: 'accounts' })
-export class Account {
-  @PrimaryGeneratedColumn('uuid') id: string;
+export class Account extends AbstractEntity {
   @Column('text') name: string;
-  @Column({ type: 'timestamptz', default: () => 'now()' }) createdAt: Date;
 }

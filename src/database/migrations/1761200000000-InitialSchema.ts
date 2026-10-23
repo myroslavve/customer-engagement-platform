@@ -13,7 +13,8 @@ export class InitialSchema1761200000000 implements MigrationInterface {
       CREATE TABLE "accounts" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         "name" text NOT NULL,
-        "created_at" timestamptz NOT NULL DEFAULT now()
+        "created_at" timestamptz NOT NULL DEFAULT now(),
+        "updated_at" timestamptz NOT NULL DEFAULT now()
       )`);
 
     await queryRunner.query(`
@@ -37,7 +38,8 @@ export class InitialSchema1761200000000 implements MigrationInterface {
         "properties" jsonb NOT NULL DEFAULT '{}',
         "message_id" text,
         "occurred_at" timestamptz NOT NULL,
-        "received_at" timestamptz NOT NULL DEFAULT now()
+        "created_at" timestamptz NOT NULL DEFAULT now(),
+        "updated_at" timestamptz NOT NULL DEFAULT now()
       )`);
     await queryRunner.query(
       `CREATE UNIQUE INDEX "uq_events_account_message" ON "events" ("account_id", "message_id") WHERE "message_id" IS NOT NULL`,
@@ -65,6 +67,7 @@ export class InitialSchema1761200000000 implements MigrationInterface {
         "trigger_event_name" text NOT NULL,
         "definition" jsonb NOT NULL,
         "created_at" timestamptz NOT NULL DEFAULT now(),
+        "updated_at" timestamptz NOT NULL DEFAULT now(),
         CONSTRAINT "uq_workflow_versions_workflow_version" UNIQUE ("workflow_id", "version")
       )`);
     await queryRunner.query(
@@ -88,8 +91,8 @@ export class InitialSchema1761200000000 implements MigrationInterface {
         "wait_until" timestamptz,
         "claim_key" text,
         "context" jsonb NOT NULL DEFAULT '{}',
-        "started_at" timestamptz NOT NULL DEFAULT now(),
         "finished_at" timestamptz,
+        "created_at" timestamptz NOT NULL DEFAULT now(),
         "updated_at" timestamptz NOT NULL DEFAULT now(),
         CONSTRAINT "uq_workflow_runs_version_trigger_event" UNIQUE ("workflow_version_id", "trigger_event_id")
       )`);
