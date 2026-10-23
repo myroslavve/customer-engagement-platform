@@ -11,4 +11,6 @@ export class Profile extends AbstractEntity {
   @Column('text') externalId: string;
   @Column({ type: 'text', nullable: true }) email: string | null;
   @Column({ type: 'jsonb', default: () => "'{}'" }) traits: Record<string, unknown>;
+  /** Set when the person opted out; messaging skips them. */
+  @Column({ type: 'timestamptz', nullable: true }) unsubscribedAt: Date | null;
 }
