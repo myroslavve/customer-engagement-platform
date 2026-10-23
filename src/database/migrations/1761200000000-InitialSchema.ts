@@ -20,7 +20,7 @@ export class InitialSchema1761200000000 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE "profiles" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        "account_id" uuid NOT NULL REFERENCES "accounts"("id"),
+        "account_id" uuid NOT NULL CONSTRAINT "fk_profiles_account_id" REFERENCES "accounts"("id"),
         "external_id" text NOT NULL,
         "email" text,
         "traits" jsonb NOT NULL DEFAULT '{}',
@@ -32,8 +32,8 @@ export class InitialSchema1761200000000 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE "events" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        "account_id" uuid NOT NULL REFERENCES "accounts"("id"),
-        "profile_id" uuid NOT NULL REFERENCES "profiles"("id"),
+        "account_id" uuid NOT NULL CONSTRAINT "fk_events_account_id" REFERENCES "accounts"("id"),
+        "profile_id" uuid NOT NULL CONSTRAINT "fk_events_profile_id" REFERENCES "profiles"("id"),
         "name" text NOT NULL,
         "properties" jsonb NOT NULL DEFAULT '{}',
         "message_id" text,
@@ -51,7 +51,7 @@ export class InitialSchema1761200000000 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE "workflows" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        "account_id" uuid NOT NULL REFERENCES "accounts"("id"),
+        "account_id" uuid NOT NULL CONSTRAINT "fk_workflows_account_id" REFERENCES "accounts"("id"),
         "name" text NOT NULL,
         "status" "workflow_status" NOT NULL DEFAULT 'draft',
         "published_version_id" uuid,
@@ -62,7 +62,7 @@ export class InitialSchema1761200000000 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE "workflow_versions" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        "workflow_id" uuid NOT NULL REFERENCES "workflows"("id"),
+        "workflow_id" uuid NOT NULL CONSTRAINT "fk_workflow_versions_workflow_id" REFERENCES "workflows"("id"),
         "version" int NOT NULL,
         "trigger_event_name" text NOT NULL,
         "definition" jsonb NOT NULL,
@@ -74,17 +74,17 @@ export class InitialSchema1761200000000 implements MigrationInterface {
       `CREATE INDEX "ix_workflow_versions_trigger_event" ON "workflow_versions" ("trigger_event_name")`,
     );
     await queryRunner.query(
-      `ALTER TABLE "workflows" ADD CONSTRAINT "fk_workflows_published_version" FOREIGN KEY ("published_version_id") REFERENCES "workflow_versions"("id")`,
+      `ALTER TABLE "workflows" ADD CONSTRAINT "fk_workflows_published_version_id" FOREIGN KEY ("published_version_id") REFERENCES "workflow_versions"("id")`,
     );
 
     await queryRunner.query(`
       CREATE TABLE "workflow_runs" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        "account_id" uuid NOT NULL REFERENCES "accounts"("id"),
-        "workflow_id" uuid NOT NULL REFERENCES "workflows"("id"),
-        "workflow_version_id" uuid NOT NULL REFERENCES "workflow_versions"("id"),
-        "profile_id" uuid NOT NULL REFERENCES "profiles"("id"),
-        "trigger_event_id" uuid NOT NULL REFERENCES "events"("id"),
+        "account_id" uuid NOT NULL CONSTRAINT "fk_workflow_runs_account_id" REFERENCES "accounts"("id"),
+        "workflow_id" uuid NOT NULL CONSTRAINT "fk_workflow_runs_workflow_id" REFERENCES "workflows"("id"),
+        "workflow_version_id" uuid NOT NULL CONSTRAINT "fk_workflow_runs_workflow_version_id" REFERENCES "workflow_versions"("id"),
+        "profile_id" uuid NOT NULL CONSTRAINT "fk_workflow_runs_profile_id" REFERENCES "profiles"("id"),
+        "trigger_event_id" uuid NOT NULL CONSTRAINT "fk_workflow_runs_trigger_event_id" REFERENCES "events"("id"),
         "status" "workflow_run_status" NOT NULL,
         "current_node_id" text,
         "waiting_for_event" text,
@@ -107,7 +107,7 @@ export class InitialSchema1761200000000 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE "workflow_runs"`);
     await queryRunner.query(
-      `ALTER TABLE "workflows" DROP CONSTRAINT "fk_workflows_published_version"`,
+      `ALTER TABLE "workflows" DROP CONSTRAINT "fk_workflows_published_version_id"`,
     );
     await queryRunner.query(`DROP TABLE "workflow_versions"`);
     await queryRunner.query(`DROP TABLE "workflows"`);
