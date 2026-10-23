@@ -4,6 +4,7 @@
   "description": "",
   "scripts": {
     "test": "vitest run --passWithNoTests",
+    "test:integration": "vitest run src/admin/admin-database.integration.spec.ts --passWithNoTests",
     "build": "nest build",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\"",

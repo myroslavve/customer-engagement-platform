@@ -5,11 +5,19 @@ import { DataSource, QueryRunner } from 'typeorm';
 export class AdminDatabaseService {
   constructor(private readonly dataSource: DataSource) {}
 
-  query<T extends Record<string, unknown> = Record<string, unknown>>(
+  async query<T extends Record<string, unknown> = Record<string, unknown>>(
     text: string,
     values: unknown[] = [],
   ): Promise<{ rows: T[] }> {
-    return this.dataSource.query(text, values).then((rows: T[]) => ({ rows }));
+    const result = await this.dataSource.query(text, values);
+    const rows =
+      Array.isArray(result) &&
+      result.length === 2 &&
+      Array.isArray(result[0]) &&
+      typeof result[1] === 'number'
+        ? result[0]
+        : result;
+    return { rows: rows as T[] };
   }
 
   async transaction<T>(callback: (queryRunner: QueryRunner) => Promise<T>): Promise<T> {
