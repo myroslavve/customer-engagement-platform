@@ -1,5 +1,5 @@
 /** What workflow Conditions are evaluated against; Condition.field is a dot path into it. */
-export interface RunContext {
+export type RunContext = {
   profile: {
     id: string;
     externalId: string;
@@ -12,4 +12,4 @@ export interface RunContext {
     properties: Record<string, unknown>;
     occurredAt: string;
   } | null;
-}
+};
