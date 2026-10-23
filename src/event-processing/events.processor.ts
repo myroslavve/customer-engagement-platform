@@ -37,22 +37,25 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
   /**
    * Logs and rethrows every failure; retries and backoff come from the queue's DEFAULT_JOB_OPTIONS.
    * Missing rows throw too: producers enqueue after commit, so that is rare and worth retrying.
+   * Attempts that will be retried log at warn; only the last one (or an unrecoverable error) logs at
+   * error, so alerts fire on exhaustion rather than on every transient failure.
    */
   async process(job: Job<ProcessEventJob, void, string>): Promise<void> {
     try {
       await this.processEvent(job.data.eventId);
     } catch (error) {
-      this.logger.error(
-        {
-          message: 'process-event attempt failed',
-          jobId: job.id,
-          eventId: job.data.eventId,
-          attempt: job.attemptsStarted,
-          maxAttempts: job.opts.attempts,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        error instanceof Error ? error.stack : undefined,
-      );
+      const maxAttempts = job.opts.attempts ?? 1;
+      const willRetry = job.attemptsStarted < maxAttempts && !(error instanceof UnrecoverableError);
+      const details = {
+        message: willRetry ? 'process-event attempt failed, will retry' : 'process-event failed',
+        jobId: job.id,
+        eventId: job.data.eventId,
+        attempt: job.attemptsStarted,
+        maxAttempts,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      if (willRetry) this.logger.warn(details);
+      else this.logger.error(details, error instanceof Error ? error.stack : undefined);
       throw error;
     }
   }
