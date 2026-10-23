@@ -48,6 +48,11 @@ export type WorkflowNode = BranchNode | DelayNode | WaitForEventNode | SendEmail
 
 export type WorkflowTrigger = {
   eventName: string;
+  /**
+   * Saved audience this workflow targets. The admin API snapshots the audience rule into `filter`
+   * when the version is created, so the engine only ever evaluates `filter`.
+   */
+  audienceId?: string;
   filter?: Condition;
 };
 

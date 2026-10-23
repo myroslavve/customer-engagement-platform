@@ -1,15 +1,29 @@
 import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
-import { IsISO8601, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AdminAuthGuard } from '../auth/admin-auth.guard';
 import { AdminRequest, requireAccountId } from './admin-request';
-import { ActivityService } from './activity.service';
+import { ActivityItemType, ActivityService } from './activity.service';
 
 class ActivityQueryDto {
+  @IsOptional()
+  @IsIn(['event', 'run', 'message'])
+  type?: ActivityItemType;
+
   @IsOptional()
   @IsString()
   @IsUUID()
   profileId?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsUUID()
+  workflowId?: string;
+
+  /** Run or message status, e.g. failed, waiting, sent. */
+  @IsOptional()
+  @IsString()
+  status?: string;
 
   @IsOptional()
   @IsString()

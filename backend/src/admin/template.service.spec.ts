@@ -49,4 +49,51 @@ describe('TemplateService', () => {
       service.create('account-1', { name: 'Welcome', subject: 'Hello', body: 'Body' }),
     ).rejects.toThrow(ConflictException);
   });
+
+  it('rejects malformed or unsupported placeholders before touching the database', async () => {
+    const database = { query: vi.fn() };
+    const service = new TemplateService(database as never);
+
+    await expect(
+      service.create('account-1', { name: 'Welcome', subject: 'Hi {{firstName', body: 'Body' }),
+    ).rejects.toThrow('unclosed placeholder');
+    await expect(
+      service.update('account-1', 'template-1', {
+        name: 'Welcome',
+        subject: 'Hi',
+        body: '<p>{{profile.name}}</p>',
+      }),
+    ).rejects.toThrow('Unsupported template placeholder');
+    expect(database.query).not.toHaveBeenCalled();
+  });
+
+  it('accepts supported shorthand and context placeholders', async () => {
+    const database = { query: vi.fn().mockResolvedValue({ rows: [{ id: 'template-1' }] }) };
+    const service = new TemplateService(database as never);
+
+    await expect(
+      service.create('account-1', {
+        name: 'Welcome',
+        subject: 'Hi {{firstName}}',
+        body: '<p>{{profile.traits.plan}} {{event.properties.itemId}}</p>',
+      }),
+    ).resolves.toEqual({ id: 'template-1' });
+  });
+
+  it('rejects brace runs around a placeholder', async () => {
+    const database = { query: vi.fn() };
+    const service = new TemplateService(database as never);
+
+    await expect(
+      service.create('account-1', {
+        name: 'Welcome',
+        subject: '{{{firstName}}}',
+        body: 'Body',
+      }),
+    ).rejects.toThrow('malformed placeholder');
+    await expect(
+      service.create('account-1', { name: 'Welcome', subject: 'Hi', body: '{{firstName}' }),
+    ).rejects.toThrow('unclosed placeholder');
+    expect(database.query).not.toHaveBeenCalled();
+  });
 });
