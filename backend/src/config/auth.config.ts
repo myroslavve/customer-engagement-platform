@@ -3,8 +3,13 @@ import { z } from 'zod';
 export const AuthConfigSchema = z.object({
   jwtSecret: z.string().min(1),
   adminEmail: z.string().email(),
-  /** bcrypt hash of the admin password. */
-  adminPasswordHash: z.string().min(1),
+  /**
+   * bcrypt hash of the admin password. Format-checked so a hash mangled by `$` expansion fails at
+   * startup instead of making every login return 401 (bcrypt compare returns false, never throws).
+   */
+  adminPasswordHash: z
+    .string()
+    .regex(/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/, 'must be a bcrypt hash (quote it in .env)'),
 });
 
 export type AuthConfig = z.infer<typeof AuthConfigSchema>;
