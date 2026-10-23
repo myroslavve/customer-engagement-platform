@@ -17,6 +17,7 @@ describe('IngestionService', () => {
     };
     const queue = { publishProcessEvent: jest.fn().mockResolvedValue(undefined) };
     const service = new IngestionService(
+      { getOrThrow: jest.fn().mockReturnValue('account-1') } as never,
       database as never,
       redis as never,
       queue as never
@@ -42,6 +43,7 @@ describe('IngestionService', () => {
     };
     const queue = { publishProcessEvent: jest.fn() };
     const service = new IngestionService(
+      { getOrThrow: jest.fn().mockReturnValue('account-1') } as never,
       database as never,
       redis as never,
       queue as never
@@ -51,7 +53,7 @@ describe('IngestionService', () => {
       service.identify({ userId: 'user-1', messageId: 'message-1' })
     ).rejects.toThrow('database unavailable');
     expect(redis.client.del).toHaveBeenCalledWith(
-      'idempotency:ingestion:message-1'
+      'idempotency:ingestion:account-1:message-1'
     );
   });
 
@@ -62,6 +64,7 @@ describe('IngestionService', () => {
     };
     const queue = { publishProcessEvent: jest.fn() };
     const service = new IngestionService(
+      { getOrThrow: jest.fn().mockReturnValue('account-1') } as never,
       database as never,
       redis as never,
       queue as never
