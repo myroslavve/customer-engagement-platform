@@ -1,8 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /** Requires the templates table from AdminApi1761220000000. */
-export class Messaging1761240000000 implements MigrationInterface {
-  name = 'Messaging1761240000000';
+export class Messaging1761250000000 implements MigrationInterface {
+  name = 'Messaging1761250000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
