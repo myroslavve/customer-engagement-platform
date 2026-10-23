@@ -17,7 +17,7 @@ class LoginDto {
 @Controller('admin/auth')
 export class AdminAuthController {
   private readonly dummyPasswordHash =
-    '$2b$12$C6UzMDM.H6dfI/f/IKcEe.7Qf7R7uYh5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y';
+    '$2b$12$ijldV01X2TgdaCJG210K0ucLkKYEiYe5b8jG/ihCG44dw52b8TvFy';
 
   constructor(
     private readonly config: ConfigService,
