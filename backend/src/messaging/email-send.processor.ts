@@ -1,13 +1,14 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Job } from 'bullmq';
+import { DelayedError, Job } from 'bullmq';
 import { AppConfig } from '../config/configuration';
 import { isFinalAttempt } from '../queues/job-attempts';
 import { QUEUE_EMAIL_SEND } from '../queues/queue-names';
 import { EmailSendJob } from '../types/job.types';
 import { EmailService } from './email.service';
 import { MessageRepository } from './message.repository';
+import { SendInProgressError } from './send-in-progress.error';
 
 /**
  * Resend allows 2 requests/second. A decorator constant because @nestjs/bullmq builds the worker
@@ -38,13 +39,24 @@ export class EmailSendProcessor extends WorkerHost implements OnApplicationBoots
   }
 
   /** Once BullMQ gives up (attempts exhausted or unrecoverable), the message is failed with the error. */
-  async process(job: Job<EmailSendJob, void, string>): Promise<void> {
+  async process(job: Job<EmailSendJob, void, string>, token?: string): Promise<void> {
     try {
       await this.emailService.send(job.data.messageId, job.attemptsStarted);
     } catch (error) {
+      if (error instanceof SendInProgressError) return this.postpone(job, error, token);
       if (isFinalAttempt(job, error)) await this.failMessage(job, error);
       throw error;
     }
+  }
+
+  /** Re-checks the message once the other worker's claim may be abandoned; uses up no attempt. */
+  private async postpone(
+    job: Job<EmailSendJob, void, string>,
+    error: SendInProgressError,
+    token?: string,
+  ): Promise<void> {
+    await job.moveToDelayed(error.retryAt, token);
+    throw new DelayedError();
   }
 
   /** Logs before marking, so the original error is kept even if marking fails. */

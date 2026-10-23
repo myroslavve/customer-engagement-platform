@@ -6,7 +6,6 @@ import { AbstractRepository } from '../database/abstract.repository';
 import { Message } from '../database/entities/message.entity';
 import { MessageStatus } from '../enums/message-status.enum';
 import { CreateMessageInput } from '../types/create-message-input.types';
-import { CreateMessageResult } from '../types/create-message-result.types';
 import { Transaction } from '../types/transaction.types';
 
 /** Every status change is conditional on the expected current status, so late duplicates cannot overwrite a final state. */
@@ -16,25 +15,25 @@ export class MessageRepository extends AbstractRepository<Message> {
     super(messageRepository);
   }
 
-  /** INSERT ... ON CONFLICT (run_id, node_id) DO NOTHING, then select; the FK on template_id may throw. */
-  async createIfAbsent(
-    input: CreateMessageInput,
+  findByRunAndNode(
+    runId: string,
+    nodeId: string,
     transaction?: Transaction,
-  ): Promise<CreateMessageResult> {
-    const insertResult = await this.getRepository(transaction)
+  ): Promise<Message | null> {
+    return this.findOne({ where: { runId, nodeId } }, transaction);
+  }
+
+  /** INSERT ... ON CONFLICT (run_id, node_id) DO NOTHING, then select; the FK on template_id may throw. */
+  async createIfAbsent(input: CreateMessageInput, transaction?: Transaction): Promise<Message> {
+    await this.getRepository(transaction)
       .createQueryBuilder()
       .insert()
       .into(Message)
       // QueryDeepPartialEntity cannot map the jsonb variables column; the shape is exact.
       .values(input as QueryDeepPartialEntity<Message>)
       .orIgnore()
-      .returning('id')
       .execute();
-    const message = await this.findOneOrFail(
-      { where: { runId: input.runId, nodeId: input.nodeId } },
-      transaction,
-    );
-    return { message, created: (insertResult.raw as unknown[]).length > 0 };
+    return this.findOneOrFail({ where: { runId: input.runId, nodeId: input.nodeId } }, transaction);
   }
 
   /** queued → sending, right before the provider call. False when another attempt got there first. */
@@ -98,10 +97,6 @@ export class MessageRepository extends AbstractRepository<Message> {
       { status: MessageStatus.Skipped, error: reason, attempts },
       transaction,
     );
-  }
-
-  findByRunId(runId: string, transaction?: Transaction): Promise<Message[]> {
-    return this.find({ where: { runId }, order: { createdAt: 'ASC' } }, transaction);
   }
 
   private async transition(

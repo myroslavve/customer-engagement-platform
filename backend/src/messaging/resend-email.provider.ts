@@ -4,8 +4,8 @@ import { SendResult } from '../types/send-result.types';
 import { EmailProvider } from './email-provider';
 import { EmailSendError } from './email-send.error';
 
-/** Well under BullMQ's 30 s job lock, so a hung request cannot outlive its job. */
-const REQUEST_TIMEOUT_MS = 10_000;
+/** Bounds how long a `sending` claim stays active; EmailService's CLAIM_TIMEOUT_MS must exceed it. */
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export class ResendEmailProvider implements EmailProvider {
   private readonly resend: Resend;
@@ -17,7 +17,7 @@ export class ResendEmailProvider implements EmailProvider {
     this.resend = new Resend(apiKey);
   }
 
-  /** A timeout aborts with a thrown error: outcome unknown. */
+  /** The SDK reports a timeout like a network failure (application_error, no status): outcome unknown. */
   async send(email: RenderedEmail): Promise<SendResult> {
     const { data, error } = await this.resend.emails.send(
       { from: this.fromAddress, to: email.to, subject: email.subject, html: email.html },

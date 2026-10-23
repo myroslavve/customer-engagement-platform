@@ -5,8 +5,8 @@ export const EmailConfigSchema = z
   .object({
     provider: z.nativeEnum(EmailProviderKind).default(EmailProviderKind.Log),
     resendApiKey: z.string().min(1).optional(),
-    /** Resend's sandbox sender works without a verified domain. */
-    fromAddress: z.string().email().default('onboarding@resend.dev'),
+    /** "hello@acme.com" or "Acme <hello@acme.com>"; Resend's sandbox sender needs no verified domain. */
+    fromAddress: z.string().min(1).default('onboarding@resend.dev'),
     concurrency: z.coerce.number().int().positive().default(2),
   })
   .superRefine((config, ctx) => {

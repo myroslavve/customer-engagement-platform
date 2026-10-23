@@ -84,7 +84,8 @@ note right of EmailService
   queued -> sending -> sent | failed; queued -> skipped | failed.
   Claimed before the provider call. A definitive rejection
   releases the message for retry; an unknown outcome ends as
-  failed/send_interrupted (at most once).
+  failed/send_interrupted (at most once). A duplicate job that
+  finds a claim younger than 60 s is delayed, not failed.
 end note
 
 package "shared" {
@@ -131,13 +132,13 @@ package "shared" {
     +findById(eventId: string): Promise<UserEvent>
   }
   class MessageRepository {
-    +createIfAbsent(message: object, tx?): Promise<{ message, created }>
+    +findByRunAndNode(runId: string, nodeId: string, tx?): Promise<Message | null>
+    +createIfAbsent(message: object, tx?): Promise<Message>
     +claimForSending(id: string, tx?): Promise<boolean>
     +releaseSending(id: string, tx?): Promise<void>
     +markSent(id: string, providerMessageId: string | null, subject: string, attempts: number, tx?): Promise<void>
     +markFailed(id: string, error: string, attempts: number, tx?): Promise<void>
     +markSkipped(id: string, reason: string, attempts: number, tx?): Promise<void>
-    +findByRunId(runId: string, tx?): Promise<Message[]>
   }
   class TemplateRepository {
     +findForAccount(id: string, accountId: string, tx?): Promise<Template | null>

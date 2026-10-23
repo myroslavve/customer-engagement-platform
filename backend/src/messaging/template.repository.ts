@@ -5,7 +5,7 @@ import { AbstractRepository } from '../database/abstract.repository';
 import { Template } from '../database/entities/template.entity';
 import { Transaction } from '../types/transaction.types';
 
-/** Any value Postgres accepts as uuid (class-validator's isUUID also demands an RFC version digit). */
+/** Canonical 8-4-4-4-12 hex form, any version (class-validator's isUUID demands an RFC version digit). */
 const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Read side of templates; the admin API owns writes. */

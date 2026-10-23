@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { UnrecoverableError } from 'bullmq';
+import { Message } from '../database/entities/message.entity';
 import { NodeType } from '../enums/node-type.enum';
 import { StepResultKind } from '../enums/step-result-kind.enum';
 import { QueueProducer } from '../queues/queue-producer';
@@ -26,9 +27,18 @@ export class SendEmailStepExecutor implements StepExecutor<SendEmailNode> {
   }
 
   async execute(node: SendEmailNode, ctx: StepExecutionContext): Promise<StepResult> {
+    const message =
+      (await this.messageRepository.findByRunAndNode(ctx.run.id, node.id)) ??
+      (await this.createMessage(node, ctx));
+    await this.queueProducer.enqueueEmail({ messageId: message.id });
+    return { kind: StepResultKind.Advance, nextNodeId: node.next };
+  }
+
+  /** Only a first visit checks the template: a retried step enqueues the row it already wrote. */
+  private async createMessage(node: SendEmailNode, ctx: StepExecutionContext): Promise<Message> {
     const { run, runContext } = ctx;
     await this.assertTemplateExists(node, run.accountId);
-    const { message } = await this.messageRepository.createIfAbsent({
+    return this.messageRepository.createIfAbsent({
       accountId: run.accountId,
       runId: run.id,
       nodeId: node.id,
@@ -37,8 +47,6 @@ export class SendEmailStepExecutor implements StepExecutor<SendEmailNode> {
       toEmail: runContext.profile.email,
       variables: runContext,
     });
-    await this.queueProducer.enqueueEmail({ messageId: message.id });
-    return { kind: StepResultKind.Advance, nextNodeId: node.next };
   }
 
   /**

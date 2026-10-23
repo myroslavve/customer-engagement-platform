@@ -10,8 +10,15 @@ import { ProfileRepository } from '../workflows/profile.repository';
 import { EMAIL_PROVIDER, EmailProvider } from './email-provider';
 import { EmailSendError } from './email-send.error';
 import { MessageRepository } from './message.repository';
+import { SendInProgressError } from './send-in-progress.error';
 import { TemplateRenderer } from './template-renderer';
 import { TemplateRepository } from './template.repository';
+
+/**
+ * How long a `sending` claim may still be active (claimForSending bumps updatedAt). Must exceed the
+ * provider's request timeout (Resend: 30 s).
+ */
+const CLAIM_TIMEOUT_MS = 60_000;
 
 /**
  * At-most-once delivery: the message is claimed (`sending`) before the provider call. A definitive
@@ -30,9 +37,7 @@ export class EmailService {
 
   async send(messageId: string, attempt: number): Promise<void> {
     const message = await this.messageRepository.findByIdOrFail(messageId);
-    if (message.status === MessageStatus.Sending) {
-      return this.messageRepository.markFailed(message.id, MessageReason.SendInterrupted, attempt);
-    }
+    if (message.status === MessageStatus.Sending) return this.resolveClaim(message, attempt);
     if (message.status !== MessageStatus.Queued) return;
 
     if (message.toEmail === null) {
@@ -60,6 +65,17 @@ export class EmailService {
       rendered.subject,
       attempt,
     );
+  }
+
+  /**
+   * A stalled job can be re-run while its first worker is still sending. A claim younger than
+   * CLAIM_TIMEOUT_MS may still be active, so the caller retries after it; an older one was
+   * abandoned with an unknown outcome and is failed rather than resent.
+   */
+  private async resolveClaim(message: Message, attempt: number): Promise<void> {
+    const abandonedAt = message.updatedAt.getTime() + CLAIM_TIMEOUT_MS;
+    if (Date.now() < abandonedAt) throw new SendInProgressError(abandonedAt);
+    await this.messageRepository.markFailed(message.id, MessageReason.SendInterrupted, attempt);
   }
 
   private async isUnsubscribed(message: Message): Promise<boolean> {
