@@ -3,7 +3,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE IF NOT EXISTS accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS profiles (
@@ -25,7 +26,9 @@ CREATE TABLE IF NOT EXISTS events (
   properties JSONB NOT NULL DEFAULT '{}'::jsonb,
   message_id TEXT,
   occurred_at TIMESTAMPTZ NOT NULL,
-  received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS events_profile_occurred_idx

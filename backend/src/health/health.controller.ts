@@ -1,9 +1,12 @@
-import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import { Controller, Get, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { DatabaseService } from '../infra/database.service';
 import { RedisService } from '../infra/redis.service';
 
 @Controller('health')
+@SkipThrottle()
 export class HealthController {
+  private readonly logger = new Logger(HealthController.name);
   constructor(
     private readonly database: DatabaseService,
     private readonly redis: RedisService
@@ -12,12 +15,19 @@ export class HealthController {
   @Get()
   async getHealth(): Promise<{ status: string; database: string; redis: string }> {
     try {
-      await Promise.all([
+      const results = await Promise.allSettled([
         this.database.healthcheck(),
         this.redis.healthcheck(2_000)
       ]);
-      return { status: 'ok', database: 'ok', redis: 'ok' };
-    } catch {
+      const database = results[0].status === 'fulfilled' ? 'ok' : 'unavailable';
+      const redis = results[1].status === 'fulfilled' ? 'ok' : 'unavailable';
+      if (database === 'unavailable' || redis === 'unavailable') {
+        this.logger.error(`Dependency health check failed: database=${database}, redis=${redis}`);
+        throw new ServiceUnavailableException({ status: 'unavailable', database, redis });
+      }
+      return { status: 'ok', database, redis };
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) throw error;
       throw new ServiceUnavailableException({
         status: 'unavailable',
         database: 'unknown',

@@ -18,7 +18,7 @@ import { ApiKeyGuard } from './ingestion/api-key.guard';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     JwtModule.register({ global: true }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }])
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }])
   ],
   controllers: [
     HealthController,

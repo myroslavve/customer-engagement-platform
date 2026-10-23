@@ -30,7 +30,7 @@ export class IngestionService {
     }
 
     try {
-      const eventId = await this.database.transaction(async (client) => {
+      const result = await this.database.transaction(async (client) => {
         const profile = await client.query<{ id: string }>(
           `INSERT INTO profiles (account_id, external_id, email, traits)
            VALUES ($1, $2, $3, $4)
@@ -40,8 +40,8 @@ export class IngestionService {
           [
             accountId,
             input.userId,
-            input.email ?? null,
-            JSON.stringify(input.traits ?? {})
+            'email' in input ? input.email ?? null : null,
+            JSON.stringify('traits' in input ? input.traits ?? {} : {})
           ]
         );
         const event = await client.query<{ id: string }>(
@@ -57,16 +57,28 @@ export class IngestionService {
             JSON.stringify(
               type === 'track'
                 ? (input as TrackDto).properties ?? {}
-                : input.traits ?? {}
+                : 'traits' in input
+                  ? input.traits ?? {}
+                  : {}
             ),
             input.messageId,
             input.timestamp ?? null
           ]
         );
-        return event.rows[0].id;
+        if (event.rows.length > 0) {
+          return { eventId: event.rows[0].id, created: true };
+        }
+        const existing = await client.query<{ id: string }>(
+          'SELECT id FROM events WHERE account_id = $1 AND message_id = $2',
+          [accountId, input.messageId]
+        );
+        return { eventId: existing.rows[0]?.id, created: false };
       });
-      await this.queue.publishProcessEvent(eventId);
-      return { accepted: true, eventId };
+      if (!result.eventId || !result.created) {
+        return { accepted: true, eventId: result.eventId };
+      }
+      await this.queue.publishProcessEvent(result.eventId);
+      return { accepted: true, eventId: result.eventId };
     } catch (error) {
       await this.redis.client.del(key);
       throw error;

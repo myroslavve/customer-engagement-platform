@@ -1,16 +1,19 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
-import { RedisService } from './redis.service';
+import Redis from 'ioredis';
 
 @Injectable()
 export class QueueService implements OnModuleDestroy {
   private readonly events: Queue;
 
-  constructor(config: ConfigService, redis: RedisService) {
+  constructor(config: ConfigService) {
+    const connection = new Redis(config.getOrThrow<string>('REDIS_URL'), {
+      maxRetriesPerRequest: null
+    });
     this.events = new Queue('events', {
-      connection: redis.client,
-      prefix: config.get<string>('BULLMQ_PREFIX', 'cep')
+      connection,
+      prefix: config.get<string>('BULLMQ_PREFIX', 'bull')
     });
   }
 

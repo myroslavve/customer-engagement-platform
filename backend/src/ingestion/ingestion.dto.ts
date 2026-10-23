@@ -7,20 +7,10 @@ import {
   Length
 } from 'class-validator';
 
-export class IdentifyDto {
+export class IngestionDto {
   @IsString()
   @Length(1, 255)
   userId!: string;
-
-  @IsOptional()
-  @IsEmail()
-  @IsString()
-  @Length(1, 255)
-  email?: string;
-
-  @IsOptional()
-  @IsObject()
-  traits?: Record<string, unknown>;
 
   @IsOptional()
   @IsString()
@@ -32,7 +22,19 @@ export class IdentifyDto {
   messageId!: string;
 }
 
-export class TrackDto extends IdentifyDto {
+export class IdentifyDto extends IngestionDto {
+  @IsOptional()
+  @IsEmail()
+  @IsString()
+  @Length(1, 255)
+  email?: string;
+
+  @IsOptional()
+  @IsObject()
+  traits?: Record<string, unknown>;
+}
+
+export class TrackDto extends IngestionDto {
   @IsString()
   @Length(1, 255)
   eventName!: string;

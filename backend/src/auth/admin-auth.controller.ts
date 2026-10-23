@@ -16,6 +16,9 @@ class LoginDto {
 
 @Controller('admin/auth')
 export class AdminAuthController {
+  private readonly dummyPasswordHash =
+    '$2b$12$C6UzMDM.H6dfI/f/IKcEe.7Qf7R7uYh5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y';
+
   constructor(
     private readonly config: ConfigService,
     private readonly jwt: JwtService
@@ -24,13 +27,13 @@ export class AdminAuthController {
   @Post('login')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(@Body() input: LoginDto): Promise<{ accessToken: string }> {
-    if (
-      input.email !== this.config.getOrThrow<string>('ADMIN_EMAIL') ||
-      !(await compare(
-        input.password,
-        this.config.getOrThrow<string>('ADMIN_PASSWORD_HASH')
-      ))
-    ) {
+    const configuredEmail = this.config.getOrThrow<string>('ADMIN_EMAIL');
+    const configuredHash = this.config.getOrThrow<string>('ADMIN_PASSWORD_HASH');
+    const passwordMatches = await compare(
+      input.password,
+      input.email === configuredEmail ? configuredHash : this.dummyPasswordHash
+    );
+    if (input.email !== configuredEmail || !passwordMatches) {
       throw new UnauthorizedException('Invalid credentials');
     }
     return {

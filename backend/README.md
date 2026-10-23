@@ -68,4 +68,4 @@ Example track request:
 }
 ```
 
-The service follows the documented sequence: validate the request, claim the account-scoped `messageId` in Redis for 24 hours, transactionally upsert the account-scoped profile and event in PostgreSQL, then publish `process-event` to the `events` BullMQ queue. The queue payload is `{ eventId: string }`, matching the worker contract. A duplicate `messageId` returns `409 Conflict`; failed persistence or queue publication releases the Redis claim so the caller can retry.
+The service follows the documented sequence: validate the request, claim the account-scoped `messageId` in Redis for 24 hours, transactionally upsert the account-scoped profile and event in PostgreSQL, then publish `process-event` to the `events` BullMQ queue. The queue uses BullMQ's default `bull` prefix and the payload is `{ eventId: string }`, matching the worker contract. A duplicate `messageId` returns `409 Conflict`; failed persistence or queue publication releases the Redis claim so the caller can retry.
