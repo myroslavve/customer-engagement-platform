@@ -8,7 +8,11 @@ export class DatabaseService implements OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
 
   constructor(config: ConfigService) {
-    this.pool = new Pool({ connectionString: config.getOrThrow<string>('DATABASE_URL') });
+    this.pool = new Pool({
+      connectionString: config.getOrThrow<string>('DATABASE_URL'),
+      connectionTimeoutMillis: 2_000,
+      statement_timeout: 2_000
+    });
     this.pool.on('error', (error) => {
       this.logger.error(`Idle PostgreSQL client error: ${error.message}`);
     });
