@@ -9,7 +9,11 @@ export const AuthConfigSchema = z.object({
    */
   adminPasswordHash: z
     .string()
-    .regex(/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/, 'must be a bcrypt hash (quote it in .env)'),
+    // cost 04–31: the range bcryptjs accepts
+    .regex(
+      /^\$2[aby]\$(0[4-9]|[12]\d|3[01])\$[./A-Za-z0-9]{53}$/,
+      'must be a bcrypt hash (quote it in .env)',
+    ),
 });
 
 export type AuthConfig = z.infer<typeof AuthConfigSchema>;
