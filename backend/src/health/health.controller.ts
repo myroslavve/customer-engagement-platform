@@ -22,7 +22,11 @@ export class HealthController {
       const database = results[0].status === 'fulfilled' ? 'ok' : 'unavailable';
       const redis = results[1].status === 'fulfilled' ? 'ok' : 'unavailable';
       if (database === 'unavailable' || redis === 'unavailable') {
-        this.logger.error(`Dependency health check failed: database=${database}, redis=${redis}`);
+        this.logger.error({
+          message: 'Dependency health check failed',
+          database,
+          redis
+        });
         throw new ServiceUnavailableException({ status: 'unavailable', database, redis });
       }
       return { status: 'ok', database, redis };

@@ -7,13 +7,13 @@ import Redis from 'ioredis';
 export class QueueService implements OnModuleDestroy {
   private readonly events: Queue;
 
-  constructor(config: ConfigService) {
-    const connection = new Redis(config.getOrThrow<string>('REDIS_URL'), {
+  constructor(configService: ConfigService) {
+    const connection = new Redis(configService.getOrThrow<string>('REDIS_URL'), {
       maxRetriesPerRequest: null
     });
     this.events = new Queue('events', {
       connection,
-      prefix: config.get<string>('BULLMQ_PREFIX', 'bull')
+      prefix: configService.get<string>('BULLMQ_PREFIX', 'bull')
     });
   }
 

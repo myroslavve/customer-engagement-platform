@@ -7,14 +7,17 @@ export class DatabaseService implements OnModuleDestroy {
   private readonly pool: Pool;
   private readonly logger = new Logger(DatabaseService.name);
 
-  constructor(config: ConfigService) {
+  constructor(configService: ConfigService) {
     this.pool = new Pool({
-      connectionString: config.getOrThrow<string>('DATABASE_URL'),
+      connectionString: configService.getOrThrow<string>('DATABASE_URL'),
       connectionTimeoutMillis: 2_000,
       statement_timeout: 2_000
     });
     this.pool.on('error', (error) => {
-      this.logger.error(`Idle PostgreSQL client error: ${error.message}`);
+      this.logger.error(
+        { message: 'Idle PostgreSQL client error', error: error.message },
+        error.stack
+      );
     });
   }
 
@@ -35,7 +38,10 @@ export class DatabaseService implements OnModuleDestroy {
         await client.query('ROLLBACK');
       } catch (rollbackError) {
         releaseError = rollbackError as Error;
-        this.logger.error(`ROLLBACK failed: ${releaseError.message}`);
+        this.logger.error(
+          { message: 'ROLLBACK failed', error: releaseError.message },
+          releaseError.stack
+        );
       }
       throw error;
     } finally {

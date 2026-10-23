@@ -6,8 +6,8 @@ import Redis from 'ioredis';
 export class RedisService implements OnModuleDestroy {
   readonly client: Redis;
 
-  constructor(config: ConfigService) {
-    this.client = new Redis(config.getOrThrow<string>('REDIS_URL'));
+  constructor(configService: ConfigService) {
+    this.client = new Redis(configService.getOrThrow<string>('REDIS_URL'));
   }
 
   async healthcheck(timeoutMs = 2_000): Promise<void> {
