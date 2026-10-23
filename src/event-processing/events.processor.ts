@@ -1,7 +1,7 @@
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, OnApplicationBootstrap } from '@nestjs/common';
-import { Job } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
+import { Job } from 'bullmq';
 import { Env } from '../config/env.schema';
 import { ProcessEventJob } from '../queues/jobs';
 import { QUEUE_EVENTS } from '../queues/queue-names';
@@ -33,29 +33,36 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
     });
   }
 
-  /** Throws on missing rows so BullMQ retries; producers enqueue after commit, so this is rare. */
+  /**
+   * Logs and rethrows every failure; retries and backoff come from the queue's DEFAULT_JOB_OPTIONS.
+   * Missing rows throw too: producers enqueue after commit, so that is rare and worth retrying.
+   */
   async process(job: Job<ProcessEventJob, void, string>): Promise<void> {
-    const event = await this.eventRepository.findById(job.data.eventId);
-    if (!event) throw new Error(`Event ${job.data.eventId} not found`);
+    try {
+      await this.processEvent(job.data.eventId);
+    } catch (error) {
+      this.logger.error(
+        'process-event attempt failed',
+        {
+          jobId: job.id,
+          eventId: job.data.eventId,
+          attempt: job.attemptsStarted,
+          maxAttempts: job.opts.attempts,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw error;
+    }
+  }
+
+  private async processEvent(eventId: string): Promise<void> {
+    const event = await this.eventRepository.findById(eventId);
+    if (!event) throw new Error(`Event ${eventId} not found`);
     const profile = await this.profileRepository.findById(event.profileId);
     if (!profile) throw new Error(`Profile ${event.profileId} not found for event ${event.id}`);
 
     await this.triggerService.startMatchingRuns(event, profile);
     await this.waitingRunService.resumeWaitingRuns(event, profile);
-  }
-
-  /** Fires on every failed attempt; BullMQ keeps only the final state, so log each one here. */
-  @OnWorkerEvent('failed')
-  onFailed(job: Job<ProcessEventJob> | undefined, error: Error): void {
-    this.logger.error(
-      'process-event attempt failed',
-      {
-        jobId: job?.id,
-        attempt: job?.attemptsMade,
-        maxAttempts: job?.opts.attempts,
-        error: error.message,
-      },
-      error.stack,
-    );
   }
 }
