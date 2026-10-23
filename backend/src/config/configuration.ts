@@ -1,4 +1,6 @@
+import { authConfig } from './auth.config';
 import { databaseConfig } from './db.config';
+import { ingestionConfig } from './ingestion.config';
 import { queueConfig } from './queue.config';
 import { redisConfig } from './redis.config';
 import { serverConfig } from './server.config';
@@ -10,6 +12,8 @@ export function configuration() {
     database: databaseConfig(),
     redis: redisConfig(),
     queue: queueConfig(),
+    ingestion: ingestionConfig(),
+    auth: authConfig(),
   };
 }
 

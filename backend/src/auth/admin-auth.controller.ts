@@ -3,44 +3,31 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Throttle } from '@nestjs/throttler';
 import { compare } from 'bcryptjs';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { AppConfig } from '../config/configuration';
+import { LoginDto } from './login.dto';
 
-class LoginDto {
-  @IsEmail()
-  email!: string;
-
-  @IsString()
-  @MinLength(8)
-  password!: string;
-}
+/** Compared against when the email is unknown, so both paths spend the same bcrypt time. */
+const DUMMY_PASSWORD_HASH = '$2b$12$ijldV01X2TgdaCJG210K0ucLkKYEiYe5b8jG/ihCG44dw52b8TvFy';
 
 @Controller('admin/auth')
 export class AdminAuthController {
-  private readonly dummyPasswordHash =
-    '$2b$12$ijldV01X2TgdaCJG210K0ucLkKYEiYe5b8jG/ihCG44dw52b8TvFy';
-
   constructor(
-    private readonly config: ConfigService,
-    private readonly jwt: JwtService,
+    private readonly configService: ConfigService<AppConfig, true>,
+    private readonly jwtService: JwtService,
   ) {}
 
   @Post('login')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(@Body() input: LoginDto): Promise<{ accessToken: string }> {
-    const configuredEmail = this.config.getOrThrow<string>('ADMIN_EMAIL');
-    const configuredHash = this.config.getOrThrow<string>('ADMIN_PASSWORD_HASH');
+    const { adminEmail, adminPasswordHash } = this.configService.get('auth', { infer: true });
+    const emailMatches = input.email === adminEmail;
     const passwordMatches = await compare(
       input.password,
-      input.email === configuredEmail ? configuredHash : this.dummyPasswordHash,
+      emailMatches ? adminPasswordHash : DUMMY_PASSWORD_HASH,
     );
-    if (input.email !== configuredEmail || !passwordMatches) {
+    if (!emailMatches || !passwordMatches) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    return {
-      accessToken: this.jwt.sign(
-        { sub: input.email, role: 'admin' },
-        { secret: this.config.getOrThrow<string>('JWT_SECRET'), expiresIn: '8h' },
-      ),
-    };
+    return { accessToken: this.jwtService.sign({ sub: input.email, role: 'admin' }) };
   }
 }
