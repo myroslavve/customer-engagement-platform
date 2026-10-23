@@ -10,9 +10,10 @@ export const ServerConfigSchema = z.object({
 export type ServerConfig = z.infer<typeof ServerConfigSchema>;
 
 export function serverConfig(): ServerConfig {
+  // `|| undefined`: an empty VAR= in .env means "not set"
   return ServerConfigSchema.parse({
-    env: process.env.NODE_ENV,
-    port: process.env.PORT,
-    logLevel: process.env.LOG_LEVEL,
+    env: process.env.NODE_ENV || undefined,
+    port: process.env.PORT || undefined,
+    logLevel: process.env.LOG_LEVEL || undefined,
   });
 }
