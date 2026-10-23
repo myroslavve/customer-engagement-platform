@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { AbstractRepository } from '../database/abstract.repository';
 import { WorkflowRun } from '../database/entities/workflow-run.entity';
 import { RunStatus } from '../enums/run-status.enum';
@@ -29,8 +28,7 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
       .createQueryBuilder()
       .insert()
       .into(WorkflowRun)
-      // QueryDeepPartialEntity cannot map Record<string, unknown> jsonb columns; the shape is exact.
-      .values(input as QueryDeepPartialEntity<WorkflowRun>)
+      .values(input)
       .orIgnore()
       .returning('id')
       .execute();
@@ -89,6 +87,68 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
           ' AND (status = :waiting OR (status = :running AND claim_key = :claimKey))',
         { runId, nodeId, waiting: RunStatus.Waiting, running: RunStatus.Running, claimKey },
       )
+      .execute();
+    return result.affected === 1;
+  }
+
+  /**
+   * Writes a step's transition only while the run is still running at fromNodeId, so a run loaded
+   * before the step executed never overwrites a change made meanwhile (failed, cancelled). A
+   * concurrent writer holds the row lock; Postgres re-checks the condition once it commits.
+   */
+  async saveTransition(
+    run: WorkflowRun,
+    fromNodeId: string,
+    transaction?: Transaction,
+  ): Promise<boolean> {
+    const result = await this.getRepository(transaction)
+      .createQueryBuilder()
+      .update(WorkflowRun)
+      .set({
+        status: run.status,
+        currentNodeId: run.currentNodeId,
+        waitingForEvent: run.waitingForEvent,
+        waitUntil: run.waitUntil,
+        claimKey: run.claimKey,
+        context: run.context,
+        finishedAt: run.finishedAt,
+      })
+      .where('id = :runId AND current_node_id = :fromNodeId AND status = :running', {
+        runId: run.id,
+        fromNodeId,
+        running: RunStatus.Running,
+      })
+      .execute();
+    return result.affected === 1;
+  }
+
+  /**
+   * Fails a live run that is still at nodeId; a stale job can never fail a run that moved on.
+   * The error is merged into context so the rest of the state (lastEventId) survives.
+   */
+  async markFailed(
+    runId: string,
+    nodeId: string,
+    error: string,
+    transaction?: Transaction,
+  ): Promise<boolean> {
+    const result = await this.getRepository(transaction)
+      .createQueryBuilder()
+      .update(WorkflowRun)
+      .set({
+        status: RunStatus.Failed,
+        finishedAt: () => 'now()',
+        waitingForEvent: null,
+        waitUntil: null,
+        claimKey: null,
+        context: () => 'context || :errorPatch::jsonb',
+      })
+      .setParameter('errorPatch', JSON.stringify({ error }))
+      .where('id = :runId AND current_node_id = :nodeId AND status IN (:...live)', {
+        runId,
+        nodeId,
+        live: [RunStatus.Running, RunStatus.Waiting],
+      })
       .execute();
     return result.affected === 1;
   }

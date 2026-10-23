@@ -3,8 +3,9 @@ import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job, UnrecoverableError } from 'bullmq';
 import { AppConfig } from '../config/configuration';
-import { ProcessEventJob } from '../types/job.types';
+import { isFinalAttempt } from '../queues/job-attempts';
 import { QUEUE_EVENTS } from '../queues/queue-names';
+import { ProcessEventJob } from '../types/job.types';
 import { EventRepository } from '../workflows/event.repository';
 import { ProfileRepository } from '../workflows/profile.repository';
 import { TriggerService } from './trigger.service';
@@ -45,7 +46,7 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
       await this.processEvent(job.data.eventId);
     } catch (error) {
       const maxAttempts = job.opts.attempts ?? 1;
-      const willRetry = job.attemptsStarted < maxAttempts && !(error instanceof UnrecoverableError);
+      const willRetry = !isFinalAttempt(job, error);
       const details = {
         message: willRetry ? 'process-event attempt failed, will retry' : 'process-event failed',
         jobId: job.id,

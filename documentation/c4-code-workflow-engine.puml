@@ -23,10 +23,38 @@ package "workflow execution" {
     +process(job: StepJob): Promise<void>
   }
   class WorkflowRunner {
-    +run(runId: string, nodeId: string): Promise<void>
+    +run(job: StepJob): Promise<void>
+    +fail(job: StepJob, error: Error): Promise<void>
+  }
+  class StepOwnershipService {
+    +findOwnedRun(job: StepJob, jobId: string): Promise<WorkflowRun | null>
+  }
+  class StepNodeResolver {
+    +resolve(run: WorkflowRun, nodeId: string): Promise<ResolvedStep>
+    +assertNextNodeExists(step: ResolvedStep, result: StepResult): void
+    +findNodeType(run: WorkflowRun, nodeId: string): Promise<NodeType | null>
+  }
+  class StepContextBuilder {
+    +build(run: WorkflowRun, job: StepJob): Promise<RunContext>
+  }
+  class StepRecorder {
+    +recordCompleted(run, job, node, output: RunStepOutput): Promise<RunStep | null>
+    +recordFailed(run, job, nodeType, error: Error): Promise<boolean>
+  }
+  class FollowUpScheduler {
+    +schedule(step: RunStep): Promise<void>
+  }
+  class "run-transition" as RunTransition <<functions>> {
+    +toStepOutput(result: StepResult, now: Date): RunStepOutput
+    +applyStepOutput(run, job, output, now): void
+  }
+  class StepExecutorRegistry {
+    +register(executor: StepExecutor): void
+    +get(nodeType: NodeType): StepExecutor
   }
   interface StepExecutor {
-    +execute(node: WorkflowNode, ctx: RunContext): Promise<StepResult>
+    +nodeType: NodeType
+    +execute(node: WorkflowNode, ctx: StepExecutionContext): Promise<StepResult>
   }
   class BranchStepExecutor
   class DelayStepExecutor
@@ -78,7 +106,15 @@ package "shared" {
     +findById(runId: string): Promise<WorkflowRun>
     +findWaiting(accountId: string, profileId: string, eventName: string, eventId: string): Promise<WorkflowRun[]>
     +claim(runId: string, nodeId: string, claimKey: string): Promise<boolean>
+    +saveTransition(run: WorkflowRun, fromNodeId: string, tx?): Promise<boolean>
+    +markFailed(runId: string, nodeId: string, error: string, tx?): Promise<boolean>
     +save(run: WorkflowRun): Promise<void>
+  }
+  class RunStepRepository {
+    +create(step: object, tx?): Promise<RunStep>
+    +createIfAbsent(step: object, tx?): Promise<void>
+    +findByJobId(jobId: string, tx?): Promise<RunStep | null>
+    +findByRunId(runId: string, tx?): Promise<RunStep[]>
   }
   class ProfileRepository {
     +findById(profileId: string): Promise<UserProfile>
@@ -112,17 +148,29 @@ WaitingRunService --> QueueProducer : enqueue next step
 ' ---- workflow execution ----
 Redis --> StepsProcessor : step jobs (incl. delayed)
 StepsProcessor --> WorkflowRunner
-WorkflowRunner --> RunRepository : load / claim / save run
-WorkflowRunner --> WorkflowRepository : load version graph
-WorkflowRunner --> StepExecutor : execute current node
+WorkflowRunner --> StepOwnershipService : does this job own the run?
+WorkflowRunner --> StepNodeResolver : node + executor
+WorkflowRunner --> StepContextBuilder : run context
+WorkflowRunner --> StepExecutor : execute node
+WorkflowRunner --> StepRecorder : record completed / failed step
+WorkflowRunner --> FollowUpScheduler : next job
+WorkflowRunner --> RunStepRepository : already recorded?
+StepOwnershipService --> RunRepository : load / claim run
+StepNodeResolver --> WorkflowRepository : load version graph
+StepNodeResolver --> StepExecutorRegistry : executor for node type
+StepContextBuilder --> ProfileRepository : profile
+StepContextBuilder --> EventRepository : event that last touched the run
+StepRecorder --> RunStepRepository : step row
+StepRecorder --> RunRepository : guarded save transition / mark failed
+StepRecorder --> RunTransition : apply result to run
+FollowUpScheduler --> QueueProducer : next step / delayed step / wait timeout
+StepExecutorRegistry --> StepExecutor
 StepExecutor <|.. BranchStepExecutor
 StepExecutor <|.. DelayStepExecutor
 StepExecutor <|.. WaitForEventStepExecutor
 StepExecutor <|.. SendEmailStepExecutor
 StepExecutor <|.. ExitStepExecutor
 BranchStepExecutor --> ConditionEvaluator
-DelayStepExecutor --> QueueProducer : delayed step
-WaitForEventStepExecutor --> QueueProducer : timeout step
 SendEmailStepExecutor --> QueueProducer : email job
 
 ' ---- messaging ----
@@ -139,11 +187,13 @@ ResendEmailProvider --> EmailDeliveryProvider : HTTPS API
 QueueProducer -[norank]-> Redis : queue.add()
 WorkflowRepository --> Database
 RunRepository --> Database
+RunStepRepository --> Database
 ProfileRepository --> Database
 EventRepository --> Database
 MessageRepository --> Database
 AbstractRepository <|-- WorkflowRepository
 AbstractRepository <|-- RunRepository
+AbstractRepository <|-- RunStepRepository
 AbstractRepository <|-- ProfileRepository
 AbstractRepository <|-- EventRepository
 
@@ -158,6 +208,13 @@ note right of RunRepository
   the step job id (claimKey): only one of
   "event arrived" / "timeout" can continue a waiting
   run, and a retried job can re-win its own claim.
+end note
+
+note right of WorkflowRunner
+  One job per node visit. run_steps.job_id makes execution
+  idempotent; deterministic job ids make the follow-up enqueue
+  idempotent. Transient errors are retried and then left for
+  job.retry(); UnrecoverableError fails the run.
 end note
 
 note right of StepsProcessor

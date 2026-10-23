@@ -96,6 +96,14 @@ upgrade, old application instances do not check token versions, so immediate tok
 guaranteed only after all old instances have been replaced. Do not route authenticated traffic to
 an older version after enabling token-version revocation.
 
+## Queue processing
+
+The `events` worker starts runs and resumes waiting ones; the `workflow-steps` worker executes a run one
+node per job and records each executed node in `run_steps`. `EVENTS_QUEUE_CONCURRENCY` and
+`STEPS_QUEUE_CONCURRENCY` (default 10 each) set the worker concurrency. A step job that exhausts its
+retries on a transient error stays in the BullMQ failed set and leaves the run where it was, so
+retrying the job resumes the run; only definition errors (missing node, no executor) fail the run.
+
 ## Scripts
 
 - `npm run start` / `npm run start:dev` — run the application (HTTP API + queue processors)

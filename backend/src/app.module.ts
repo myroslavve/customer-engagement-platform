@@ -12,6 +12,7 @@ import { EventProcessingModule } from './event-processing/event-processing.modul
 import { HealthModule } from './health/health.module';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { QueuesModule } from './queues/queues.module';
+import { WorkflowExecutionModule } from './workflow-execution/workflow-execution.module';
 import { WorkflowsModule } from './workflows/workflows.module';
 
 @Module({
@@ -43,6 +44,7 @@ import { WorkflowsModule } from './workflows/workflows.module';
     QueuesModule,
     WorkflowsModule,
     EventProcessingModule,
+    WorkflowExecutionModule,
     IngestionModule,
     AuthModule,
     AdminModule,
