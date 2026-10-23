@@ -92,4 +92,35 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
       .execute();
     return result.affected === 1;
   }
+
+  /**
+   * Fails a live run that is still at nodeId; a stale job can never fail a run that moved on.
+   * The error is merged into context so the rest of the state (lastEventId) survives.
+   */
+  async markFailed(
+    runId: string,
+    nodeId: string,
+    error: string,
+    transaction?: Transaction,
+  ): Promise<boolean> {
+    const result = await this.getRepository(transaction)
+      .createQueryBuilder()
+      .update(WorkflowRun)
+      .set({
+        status: RunStatus.Failed,
+        finishedAt: () => 'now()',
+        waitingForEvent: null,
+        waitUntil: null,
+        claimKey: null,
+        context: () => 'context || :errorPatch::jsonb',
+      })
+      .setParameter('errorPatch', JSON.stringify({ error }))
+      .where('id = :runId AND current_node_id = :nodeId AND status IN (:...live)', {
+        runId,
+        nodeId,
+        live: [RunStatus.Running, RunStatus.Waiting],
+      })
+      .execute();
+    return result.affected === 1;
+  }
 }
