@@ -13,7 +13,7 @@ Container_Ext(adminUi, "Admin UI", "React SPA", "Used by the marketing manager."
 Container_Boundary(api, "Application (API modules)") {
 
   Boundary(publicApi, "Public Ingestion API", "/api/v1/*  |  API key auth", $tags="public") {
-    Component(ingestMod, "Ingestion Module", "NestJS module", "POST /api/v1/identify\nPOST /api/v1/track\n\nValidates payload, dedupes by messageId, upserts profile, stores event.", $tags="ingest")
+    Component(ingestMod, "Ingestion Module", "NestJS module", "POST /api/v1/identify\nPOST /api/v1/track\n\nValidates payload, dedupes by messageId, upserts profile, stores event + outbox row; outbox publisher re-queues missed jobs.", $tags="ingest")
     Component(producer, "Queue Producer", "BullMQ Queue", "Adds process-event jobs to the 'events' queue for the queue processors.", $tags="ingest")
   }
 
