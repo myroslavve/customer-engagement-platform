@@ -2,13 +2,13 @@
 !include <C4/C4_Component>
 
 LAYOUT_TOP_DOWN()
-title Customer Engagement Platform - Worker - C4 Component (L3)
+title Customer Engagement Platform - Application: queue processing modules - C4 Component (L3)
 
 ContainerDb(redis, "Redis", "BullMQ", "Queues: events, workflow-steps, email-send")
 ContainerDb(pg, "Database", "PostgreSQL", "Profiles, events, workflow versions, runs, steps, messages")
 System_Ext(email, "Email Delivery Provider", "Resend / SendGrid / SES")
 
-Container_Boundary(worker, "Worker") {
+Container_Boundary(worker, "Application (queue processing modules)") {
   Component(eventsMod, "Event Processing Module", "BullMQ worker: 'events'", "Matches events to workflow triggers and starts runs; resumes runs waiting for this event.")
   Component(execMod, "Workflow Execution Module", "BullMQ worker: 'workflow-steps'", "Executes run steps: branch, delay, wait-for-event (with timeout), send email, exit. Evaluates conditions, records steps.")
   Component(msgMod, "Messaging Module", "BullMQ worker: 'email-send'", "Renders templates, checks unsubscribe, sends via provider adapter; retries with backoff, rate limited.")

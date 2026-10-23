@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService } from '../infra/database.service';
+import { AdminDatabaseService } from './admin-database.service';
 import {
   WorkflowDefinition,
   WorkflowInput,
@@ -9,7 +9,7 @@ import {
 
 @Injectable()
 export class WorkflowService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: AdminDatabaseService) {}
 
   async list(accountId: string) {
     const result = await this.database.query(
@@ -26,23 +26,23 @@ export class WorkflowService {
   async create(accountId: string, input: WorkflowInput) {
     this.validate(input.definition);
     return this.database.transaction(async (client) => {
-      const workflow = await client.query<{ id: string }>(
+      const workflow = (await client.query(
         `INSERT INTO workflows (account_id, name)
          VALUES ($1, $2) RETURNING id`,
         [accountId, input.name]
-      );
-      const version = await client.query(
+      )) as Array<{ id: string }>;
+      const version = (await client.query(
         `INSERT INTO workflow_versions
            (workflow_id, version, trigger_event_name, definition)
          VALUES ($1, 1, $2, $3)
          RETURNING id, version, trigger_event_name, definition, created_at`,
-        [workflow.rows[0].id, input.definition.trigger.eventName, JSON.stringify(input.definition)]
-      );
+        [workflow[0].id, input.definition.trigger.eventName, JSON.stringify(input.definition)]
+      )) as Array<Record<string, unknown>>;
       return {
-        id: workflow.rows[0].id,
+        id: workflow[0].id,
         name: input.name,
         status: WorkflowStatus.Draft,
-        version: version.rows[0]
+        version: version[0]
       };
     });
   }

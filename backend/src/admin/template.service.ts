@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService } from '../infra/database.service';
+import { AdminDatabaseService } from './admin-database.service';
 
 type TemplateInput = { name: string; subject: string; body: string };
 
 @Injectable()
 export class TemplateService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: AdminDatabaseService) {}
 
   async list(accountId: string) {
     const result = await this.database.query(

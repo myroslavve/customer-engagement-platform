@@ -1,77 +1,82 @@
-# Backend API
+# Backend
 
-This directory contains the API and its infrastructure integration. Worker implementation is owned separately; this service only publishes `process-event` jobs to the `events` BullMQ queue.
+NestJS monolith: one application (`src/main.ts`) serving the HTTP API (public ingestion, admin) and
+running the BullMQ queue processors in the same process, backed by PostgreSQL and Redis.
+Architecture diagrams: `../documentation/*.puml`.
 
 ## Local setup
 
-1. Start dependencies from the repository root:
+Run from `backend/` unless noted (commands work in bash and PowerShell).
 
-   ```powershell
-   docker compose up -d postgres redis
+1. Start PostgreSQL (`127.0.0.1:5440`) and Redis (`127.0.0.1:6390`) from the repository root:
+
+   ```bash
+   docker compose up -d
    ```
 
-2. Copy `backend\.env.example` to `backend\.env` and set local secrets.
-3. Install backend dependencies:
+   The PostgreSQL data lives in the `pgdata` volume and the schema is owned by the TypeORM
+   migrations. The earlier `cep-postgres` volume (raw SQL schema) is not reused or migrated: the
+   migrations cannot run on top of it. If you need its local data, back it up first
+   (`docker run --rm -v customer-engagement-platform_cep-postgres:/data -v "$PWD":/backup alpine tar czf /backup/cep-postgres.tgz -C /data .`),
+   then remove it with `docker volume rm customer-engagement-platform_cep-postgres`.
 
-   ```powershell
-   cd backend
+2. Install dependencies and create the schema:
+
+   ```bash
    npm install
+   cp .env.example .env
+   npm run migration:run
    ```
 
-4. Set the database URL in the current PowerShell session, then apply the schema:
+3. Create an account and put its id into `INGESTION_ACCOUNT_ID` in `.env`:
 
-   ```powershell
-   $env:DATABASE_URL = "postgres://cep:cep@localhost:5432/cep"
-   psql $env:DATABASE_URL -f db\001_initial.sql
+   ```bash
+   docker compose exec postgres psql -U cep -d cep -tAc "INSERT INTO accounts (name) VALUES ('local') RETURNING id"
    ```
 
-   If you changed `POSTGRES_PORT`, use that port in `DATABASE_URL`.
+4. Set `INGESTION_API_KEY` and `JWT_SECRET`, and set `ADMIN_PASSWORD_HASH` to a bcrypt hash
+   (keep it in single quotes in `.env`, it contains `$`):
 
-5. Create an account and database-backed admin user after applying the schema:
-
-   ```powershell
-   $env:INGESTION_ACCOUNT_ID = psql $env:DATABASE_URL -tAc "INSERT INTO accounts (name) VALUES ('local') RETURNING id" | Select-Object -First 1
-   $env:INGESTION_ACCOUNT_ID = $env:INGESTION_ACCOUNT_ID.Trim()
-   $hash = node -e "require('bcryptjs').hash(process.argv[1], 12).then(console.log)" "your-password"
-   psql $env:DATABASE_URL -c "INSERT INTO admin_users (account_id, email, password_hash) VALUES ('$env:INGESTION_ACCOUNT_ID', 'admin@example.com', '$hash')"
+   ```bash
+   node -e "require('bcryptjs').hash(process.argv[1], 12).then(console.log)" "your-password"
    ```
-6. Run the API:
 
-   ```powershell
+5. Run the application:
+
+   ```bash
    npm run start:dev
    ```
 
 Health: `GET http://localhost:3000/health`.
 
-Admin login is `POST /admin/login` with `{ "email": "...", "password": "..." }`.
-Use the returned bearer token for `/admin/auth/api-keys`, `/admin/templates`,
-`/admin/audiences`, `/admin/workflows`, and `/admin/activity`.
+## HTTP API
 
-Ingestion requests use an active account API key in `x-api-key` and are sent to
-`POST /api/v1/identify` or `POST /api/v1/track`. Create keys through
-`POST /admin/auth/api-keys`. Both return `202 Accepted` only after profile/event
-persistence and `process-event` queue publication.
-
-Example identify request:
-
-```json
-{
-  "userId": "user-123",
-  "email": "person@example.com",
-  "traits": { "plan": "pro" },
-  "messageId": "msg-123"
-}
-```
-
-Example track request:
+**Ingestion** (`x-api-key` header): `POST /api/v1/identify` and `POST /api/v1/track` return
+`202 Accepted` with `{ accepted: true, eventId }` after the profile and event are stored and the
+`process-event` job is queued. Sequence: validate → claim the account-scoped `messageId` in Redis for
+24 h → upsert profile, insert event and outbox row in one transaction → enqueue `process-event`
+(`{ eventId }`, the queue contract in `src/queues/jobs.ts`). A duplicate `messageId` returns
+`409 Conflict`; a failure releases the claim so the caller can retry. The outbox publisher re-adds jobs
+that did not reach the queue.
 
 ```json
-{
-  "userId": "user-123",
-  "eventName": "item_viewed",
-  "properties": { "itemId": "item-456" },
-  "messageId": "msg-124"
-}
+{ "userId": "user-123", "email": "person@example.com", "traits": { "plan": "pro" }, "messageId": "msg-123" }
 ```
 
-The service follows the documented sequence: validate the request, claim the account-scoped `messageId` in Redis for 24 hours, transactionally upsert the account-scoped profile and event in PostgreSQL, then publish `process-event` to the `events` BullMQ queue. The queue uses BullMQ's default `bull` prefix and the payload is `{ eventId: string }`, matching the worker contract. A duplicate `messageId` returns `409 Conflict`; failed persistence or queue publication releases the Redis claim so the caller can retry.
+```json
+{ "userId": "user-123", "eventName": "item_viewed", "properties": { "itemId": "item-456" }, "messageId": "msg-124" }
+```
+
+**Admin** (`Authorization: Bearer <jwt>`): `POST /admin/auth/login` with `{ email, password }` returns
+`{ accessToken }` (8 h). `/admin/templates`, `/admin/audiences`, `/admin/workflows`, `/admin/activity` are
+placeholders (`501`) until their modules land.
+
+## Scripts
+
+- `npm run start` / `npm run start:dev` — run the application (HTTP API + queue processors)
+- `npm run migration:run` / `migration:revert` / `migration:generate -- src/database/migrations/<Name>`
+- `npm run lint`, `npm run format` / `format:check`, `npm run typecheck`, `npm test`
+- `npm run start:prod` / `migration:run:prod` — run from the compiled `dist/` (Docker image)
+
+The Docker image (`Dockerfile`, build context `backend/`) runs `node dist/main.js`; run
+`npm run migration:run:prod` from it before rolling out a new version.

@@ -1,93 +1,120 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DatabaseService } from '../infra/database.service';
-import { QueueService } from '../infra/queue.service';
-import { RedisService } from '../infra/redis.service';
-import { IdentifyDto, TrackDto } from './ingestion.dto';
+import { AppConfig } from '../config/configuration';
+import { QueueProducer } from '../queues/queue-producer';
+import { IngestionResult } from '../types/ingestion-result.types';
+import { EventRepository } from '../workflows/event.repository';
+import { ProfileRepository } from '../workflows/profile.repository';
+import { EventOutboxRepository } from './event-outbox.repository';
+import { IdempotencyService } from './idempotency.service';
+import { IdentifyDto, IngestionDto, TrackDto } from './ingestion.dto';
 
+const IDENTIFY_EVENT_NAME = 'identify';
+
+/**
+ * validate (ValidationPipe) -> dedupe (Redis messageId claim) -> persist (profile upsert, event,
+ * outbox row in one transaction) -> enqueue process-event -> delete the outbox row. A failure
+ * releases the claim so the client can retry; the outbox publisher re-publishes jobs whose enqueue
+ * did not happen (crash or Redis failure between commit and enqueue).
+ */
 @Injectable()
 export class IngestionService {
+  private readonly logger = new Logger(IngestionService.name);
+
   constructor(
-    private readonly config: ConfigService,
-    private readonly database: DatabaseService,
-    private readonly redis: RedisService,
-    private readonly queue: QueueService
+    private readonly configService: ConfigService<AppConfig, true>,
+    private readonly idempotencyService: IdempotencyService,
+    private readonly profileRepository: ProfileRepository,
+    private readonly eventRepository: EventRepository,
+    private readonly eventOutboxRepository: EventOutboxRepository,
+    private readonly queueProducer: QueueProducer,
   ) {}
 
-  identify(input: IdentifyDto, accountId?: string) {
-    return this.persist(input, 'identify', accountId);
+  identify(input: IdentifyDto): Promise<IngestionResult> {
+    return this.ingest(input, {
+      email: input.email ?? null,
+      traits: input.traits ?? {},
+      eventName: IDENTIFY_EVENT_NAME,
+      properties: input.traits ?? {},
+    });
   }
 
-  track(input: TrackDto, accountId?: string) {
-    return this.persist(input, 'track', accountId);
+  track(input: TrackDto): Promise<IngestionResult> {
+    return this.ingest(input, {
+      email: null,
+      traits: {},
+      eventName: input.eventName,
+      properties: input.properties ?? {},
+    });
   }
 
-  private async persist(input: IdentifyDto | TrackDto, type: string, requestedAccountId?: string) {
-    const accountId =
-      requestedAccountId ?? this.config.getOrThrow<string>('INGESTION_ACCOUNT_ID');
-    const key = `idempotency:ingestion:${accountId}:${input.messageId}`;
-    if (!(await this.redis.client.set(key, '1', 'EX', 86400, 'NX'))) {
+  private async ingest(
+    input: IngestionDto,
+    data: {
+      email: string | null;
+      traits: Record<string, unknown>;
+      eventName: string;
+      properties: Record<string, unknown>;
+    },
+  ): Promise<IngestionResult> {
+    const { accountId } = this.configService.get('ingestion', { infer: true });
+    if (!(await this.idempotencyService.claim(accountId, input.messageId))) {
       throw new ConflictException('messageId has already been processed');
     }
 
     try {
-      const result = await this.database.transaction(async (client) => {
-        const existingEvent = await client.query<{ id: string }>(
-          'SELECT id FROM events WHERE account_id = $1 AND message_id = $2',
-          [accountId, input.messageId]
+      const { eventId, created } = await this.eventRepository.transaction(async (transaction) => {
+        const existing = await this.eventRepository.findByMessageId(
+          accountId,
+          input.messageId,
+          transaction,
         );
-        if (existingEvent.rows[0]) {
-          return { eventId: existingEvent.rows[0].id, created: false };
-        }
-        const profile = await client.query<{ id: string }>(
-          `INSERT INTO profiles (account_id, external_id, email, traits)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (account_id, external_id) DO UPDATE SET email = COALESCE(EXCLUDED.email, profiles.email),
-             traits = profiles.traits || EXCLUDED.traits, updated_at = NOW()
-           RETURNING id`,
-          [
+        if (existing) return { eventId: existing.id, created: false };
+
+        const profileId = await this.profileRepository.upsert(
+          { accountId, externalId: input.userId, email: data.email, traits: data.traits },
+          transaction,
+        );
+        const newEventId = await this.eventRepository.createIfAbsent(
+          {
             accountId,
-            input.userId,
-            'email' in input ? input.email ?? null : null,
-            JSON.stringify('traits' in input ? input.traits ?? {} : {})
-          ]
+            profileId,
+            name: data.eventName,
+            properties: data.properties,
+            messageId: input.messageId,
+            occurredAt: input.timestamp ? new Date(input.timestamp) : new Date(),
+          },
+          transaction,
         );
-        const event = await client.query<{ id: string }>(
-          `INSERT INTO events (account_id, profile_id, name, properties, message_id, occurred_at)
-           VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
-           ON CONFLICT (account_id, message_id) WHERE message_id IS NOT NULL
-           DO NOTHING
-           RETURNING id`,
-          [
-            accountId,
-            profile.rows[0].id,
-            type === 'track' ? (input as TrackDto).eventName : 'identify',
-            JSON.stringify(
-              type === 'track'
-                ? (input as TrackDto).properties ?? {}
-                : 'traits' in input
-                  ? input.traits ?? {}
-                  : {}
-            ),
-            input.messageId,
-            input.timestamp ?? null
-          ]
-        );
-        if (!event.rows[0]) return { eventId: undefined, created: false };
-        await client.query(
-          'INSERT INTO event_outbox (event_id) VALUES ($1) ON CONFLICT (event_id) DO NOTHING',
-          [event.rows[0].id]
-        );
-        return { eventId: event.rows[0].id, created: true };
+        if (!newEventId) return { eventId: undefined, created: false };
+        await this.eventOutboxRepository.add(newEventId, transaction);
+        return { eventId: newEventId, created: true };
       });
-      if (!result.eventId || !result.created) {
-        return { accepted: true, eventId: result.eventId };
+
+      if (eventId && created) {
+        await this.queueProducer.enqueueProcessEvent({ eventId });
+        await this.removeOutboxEntry(eventId);
       }
-      await this.queue.publishProcessEvent(result.eventId);
-      return { accepted: true, eventId: result.eventId };
+      return { accepted: true, eventId };
     } catch (error) {
-      await this.redis.client.del(key);
+      await this.idempotencyService.release(accountId, input.messageId);
       throw error;
+    }
+  }
+
+  /**
+   * The job is queued, so the outbox row is no longer needed. Best effort: the event is stored and
+   * queued, so a failed delete must not fail the request; the outbox publisher removes it later.
+   */
+  private async removeOutboxEntry(eventId: string): Promise<void> {
+    try {
+      await this.eventOutboxRepository.removeByEventId(eventId);
+    } catch (error) {
+      this.logger.warn({
+        message: 'Failed to remove outbox entry after enqueue',
+        eventId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 }

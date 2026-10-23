@@ -1,9 +1,10 @@
+import { describe, expect, it, vi } from 'vitest';
 import { ActivityService } from './activity.service';
 
 describe('ActivityService', () => {
   it('builds account-scoped filtered activity queries', async () => {
     const database = {
-      query: jest.fn().mockResolvedValue({ rows: [{ id: 'event-1' }] })
+      query: vi.fn().mockResolvedValue({ rows: [{ id: 'event-1' }] })
     };
     const service = new ActivityService(database as never);
 
@@ -23,7 +24,7 @@ describe('ActivityService', () => {
 
   it('caps requested activity limits', async () => {
     const database = {
-      query: jest.fn().mockResolvedValue({ rows: [] })
+      query: vi.fn().mockResolvedValue({ rows: [] })
     };
     const service = new ActivityService(database as never);
 

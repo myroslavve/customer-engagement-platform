@@ -7,7 +7,7 @@ import {
   Post,
   Req,
   UnauthorizedException,
-  UseGuards
+  UseGuards,
 } from '@nestjs/common';
 import { IsEmail, IsString, Length, MinLength } from 'class-validator';
 import { AdminAuthGuard } from './admin-auth.guard';

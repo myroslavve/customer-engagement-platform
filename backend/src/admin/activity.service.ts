@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseService } from '../infra/database.service';
+import { AdminDatabaseService } from './admin-database.service';
 
 type ActivityFilter = {
   profileId?: string;
@@ -11,7 +11,7 @@ type ActivityFilter = {
 
 @Injectable()
 export class ActivityService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: AdminDatabaseService) {}
 
   async list(accountId: string, filter: ActivityFilter) {
     const values: unknown[] = [accountId];

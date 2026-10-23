@@ -1,30 +1,21 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { createHash } from 'crypto';
-import { DatabaseService } from '../infra/database.service';
+import { ConfigService } from '@nestjs/config';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { AppConfig } from '../config/configuration';
 
+/** Checks x-api-key in constant time (both sides hashed to equal length first). */
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
-  constructor(
-    private readonly database: DatabaseService
-  ) {}
+  constructor(private readonly configService: ConfigService<AppConfig, true>) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<{
-      headers: Record<string, string>;
-      accountId?: string;
-    }>();
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<{ headers: Record<string, string> }>();
     const supplied = request.headers['x-api-key'];
-    if (!supplied) throw new UnauthorizedException('Invalid API key');
-    const keyHash = createHash('sha256').update(supplied).digest('hex');
-    const result = await this.database.query<{ account_id: string }>(
-      `SELECT account_id FROM api_keys
-       WHERE key_hash = $1 AND revoked_at IS NULL`,
-      [keyHash]
-    );
-    if (!result.rows[0]) {
+    const { apiKey } = this.configService.get('ingestion', { infer: true });
+    const digest = (value: string) => createHash('sha256').update(value).digest();
+    if (!supplied || !timingSafeEqual(digest(supplied), digest(apiKey))) {
       throw new UnauthorizedException('Invalid API key');
     }
-    request.accountId = result.rows[0].account_id;
     return true;
   }
 }

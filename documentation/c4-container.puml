@@ -12,25 +12,21 @@ System_Ext(email, "Email Delivery Provider", "Resend / SendGrid / AWS SES sandbo
 
 System_Boundary(cep, "Customer Engagement Platform") {
   Container(adminUi, "Admin UI", "React SPA", "Template editor, audience rules, workflow builder, activity log.")
-  Container(api, "API Server", "Node.js, NestJS/Express, REST", "Public ingestion API (/api/v1/identify, /api/v1/track) with API-key auth. Admin API for templates, segments, workflows, activity. Persists events and enqueues jobs.")
-  Container(worker, "Worker", "Node.js, BullMQ workers", "Same codebase, separate process. Matches triggers, runs workflow steps (branch, delay, wait-for-event, send, exit), renders and sends emails with retries.")
+  Container(app, "Application", "Node.js, NestJS (monolith, single process)", "HTTP API: public ingestion (/api/v1/identify, /api/v1/track, API-key auth) and admin API (templates, segments, workflows, activity). Persists events and enqueues jobs. In the same process, BullMQ queue processors match triggers, run workflow steps (branch, delay, wait-for-event, send, exit), render and send emails with retries.")
   ContainerDb(pg, "Database", "PostgreSQL", "Source of truth: accounts, API keys, profiles, events, templates, segments, workflow versions, workflow runs, run steps, message log.")
   ContainerDb(redis, "Redis", "Redis", "BullMQ queues (events, workflow-steps, email-send) incl. delayed jobs; idempotency keys; rate limiting.")
 }
 
 Rel(marketer, adminUi, "Uses", "HTTPS")
-Rel(adminUi, api, "Admin API calls", "REST/JSON, JWT")
+Rel(adminUi, app, "Admin API calls", "REST/JSON, JWT")
 
 Rel(enduser, product, "Uses")
-Rel(product, api, "POST identify / track", "REST/JSON, API key")
-Rel(api, product, "202 Accepted + eventId / 4xx", "REST/JSON")
+Rel(product, app, "POST identify / track", "REST/JSON, API key")
+Rel(app, product, "202 Accepted + eventId / 4xx", "REST/JSON")
 
-Rel(api, pg, "Reads/writes", "SQL")
-Rel(api, redis, "Enqueues 'process-event' jobs; checks idempotency keys")
-
-Rel(worker, redis, "Consumes jobs; schedules delayed jobs (delays, wait timeouts)", "BullMQ")
-Rel(worker, pg, "Reads workflows/profiles; writes runs, steps, message log", "SQL")
-Rel(worker, email, "Sends email; gets sent/failed", "HTTPS API")
+Rel(app, pg, "Reads/writes events, profiles, workflows, runs, steps, message log", "SQL")
+Rel(app, redis, "Enqueues and consumes jobs; schedules delayed jobs (delays, wait timeouts); idempotency keys", "BullMQ")
+Rel(app, email, "Sends email; gets sent/failed", "HTTPS API")
 Rel(email, enduser, "Delivers campaign email", "Email")
 
 SHOW_LEGEND()

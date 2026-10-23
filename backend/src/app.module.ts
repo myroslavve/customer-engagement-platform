@@ -1,57 +1,53 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { AdminAuthController } from './auth/admin-auth.controller';
-import { AdminAuthService } from './auth/admin-auth.service';
-import { AdminAuthGuard } from './auth/admin-auth.guard';
-import { TemplateController } from './admin/template.controller';
-import { TemplateService } from './admin/template.service';
-import { AudienceController } from './admin/audience.controller';
-import { AudienceService } from './admin/audience.service';
-import { WorkflowController } from './admin/workflow.controller';
-import { WorkflowService } from './admin/workflow.service';
-import { ActivityController } from './admin/activity.controller';
-import { ActivityService } from './admin/activity.service';
-import { HealthController } from './health/health.controller';
-import { DatabaseService } from './infra/database.service';
-import { QueueService } from './infra/queue.service';
-import { RedisService } from './infra/redis.service';
-import { OutboxService } from './infra/outbox.service';
-import { IngestionController } from './ingestion/ingestion.controller';
-import { IngestionService } from './ingestion/ingestion.service';
-import { ApiKeyGuard } from './ingestion/api-key.guard';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { WinstonModule, utilities as nestWinstonUtilities } from 'nest-winston';
+import { format, transports } from 'winston';
+import { AdminModule } from './admin/admin.module';
+import { AuthModule } from './auth/auth.module';
+import { AppConfig, configuration } from './config/configuration';
+import { DatabaseModule } from './database/database.module';
+import { EventProcessingModule } from './event-processing/event-processing.module';
+import { HealthModule } from './health/health.module';
+import { IngestionModule } from './ingestion/ingestion.module';
+import { QueuesModule } from './queues/queues.module';
+import { WorkflowsModule } from './workflows/workflows.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    JwtModule.register({ global: true }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }])
+    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    WinstonModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService<AppConfig, true>) => {
+        const { env, logLevel } = configService.get('server', { infer: true });
+        return {
+          level: logLevel,
+          transports: [
+            new transports.Console({
+              format: format.combine(
+                format.timestamp(),
+                format.ms(),
+                nestWinstonUtilities.format.nestLike('CEP', {
+                  colors: env !== 'production',
+                  prettyPrint: true,
+                }),
+              ),
+            }),
+          ],
+        };
+      },
+    }),
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    DatabaseModule,
+    QueuesModule,
+    WorkflowsModule,
+    EventProcessingModule,
+    IngestionModule,
+    AuthModule,
+    AdminModule,
+    HealthModule,
   ],
-  controllers: [
-    HealthController,
-    IngestionController,
-    AdminAuthController,
-    TemplateController,
-    AudienceController,
-    WorkflowController,
-    ActivityController
-  ],
-  providers: [
-    DatabaseService,
-    RedisService,
-    QueueService,
-    OutboxService,
-    IngestionService,
-    ApiKeyGuard,
-    AdminAuthService,
-    AdminAuthGuard,
-    TemplateService,
-    AudienceService,
-    WorkflowService,
-    ActivityService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard }
-  ]
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

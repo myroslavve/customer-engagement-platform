@@ -1,31 +1,25 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
 import { ApiKeyGuard } from './api-key.guard';
 
-describe('ApiKeyGuard', () => {
-  it('attaches the owning account for an active key', async () => {
-    const database = {
-      query: jest.fn().mockResolvedValue({ rows: [{ account_id: 'account-1' }] })
-    };
-    const request = { headers: { 'x-api-key': 'cep_secret' } };
-    const context = {
-      switchToHttp: () => ({ getRequest: () => request })
-    } as unknown as ExecutionContext;
-    const guard = new ApiKeyGuard(database as never);
+function contextFor(key?: string): ExecutionContext {
+  return {
+    switchToHttp: () => ({ getRequest: () => ({ headers: key ? { 'x-api-key': key } : {} }) }),
+  } as unknown as ExecutionContext;
+}
 
-    await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(request).toHaveProperty('accountId', 'account-1');
+describe('ApiKeyGuard', () => {
+  it('accepts the configured API key', () => {
+    const config = { get: vi.fn().mockReturnValue({ apiKey: 'cep_secret' }) };
+    const guard = new ApiKeyGuard(config as never);
+
+    expect(guard.canActivate(contextFor('cep_secret'))).toBe(true);
   });
 
-  it('rejects unknown or revoked keys', async () => {
-    const database = {
-      query: jest.fn().mockResolvedValue({ rows: [] })
-    };
-    const request = { headers: { 'x-api-key': 'cep_missing' } };
-    const context = {
-      switchToHttp: () => ({ getRequest: () => request })
-    } as unknown as ExecutionContext;
-    const guard = new ApiKeyGuard(database as never);
+  it('rejects an unknown API key', () => {
+    const config = { get: vi.fn().mockReturnValue({ apiKey: 'cep_secret' }) };
+    const guard = new ApiKeyGuard(config as never);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    expect(() => guard.canActivate(contextFor('cep_missing'))).toThrow(UnauthorizedException);
   });
 });

@@ -1,10 +1,11 @@
+import { describe, expect, it, vi } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import { TemplateService } from './template.service';
 
 describe('TemplateService', () => {
   it('creates a template with the account scope', async () => {
     const database = {
-      query: jest.fn().mockResolvedValue({ rows: [{ id: 'template-1' }] })
+      query: vi.fn().mockResolvedValue({ rows: [{ id: 'template-1' }] })
     };
     const service = new TemplateService(database as never);
 
@@ -23,7 +24,7 @@ describe('TemplateService', () => {
 
   it('rejects updates for templates outside the account', async () => {
     const database = {
-      query: jest.fn().mockResolvedValue({ rows: [] })
+      query: vi.fn().mockResolvedValue({ rows: [] })
     };
     const service = new TemplateService(database as never);
 

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { DatabaseService } from '../infra/database.service';
+import { AdminDatabaseService } from './admin-database.service';
 
 export type AudienceRule =
   | { all: AudienceRule[] }
@@ -41,7 +41,7 @@ function matches(rule: AudienceRule, profile: Record<string, unknown>): boolean 
 
 @Injectable()
 export class AudienceService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: AdminDatabaseService) {}
 
   async list(accountId: string) {
     const result = await this.database.query(
