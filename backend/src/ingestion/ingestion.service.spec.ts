@@ -7,8 +7,10 @@ describe('IngestionService', () => {
         callback({
           query: jest
             .fn()
+            .mockResolvedValueOnce({ rows: [] })
             .mockResolvedValueOnce({ rows: [{ id: 'profile-1' }] })
             .mockResolvedValueOnce({ rows: [{ id: 'event-1' }] })
+            .mockResolvedValueOnce({ rows: [] })
         })
       )
     };

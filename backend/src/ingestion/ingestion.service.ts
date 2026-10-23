@@ -31,6 +31,13 @@ export class IngestionService {
 
     try {
       const result = await this.database.transaction(async (client) => {
+        const existingEvent = await client.query<{ id: string }>(
+          'SELECT id FROM events WHERE account_id = $1 AND message_id = $2',
+          [accountId, input.messageId]
+        );
+        if (existingEvent.rows[0]) {
+          return { eventId: existingEvent.rows[0].id, created: false };
+        }
         const profile = await client.query<{ id: string }>(
           `INSERT INTO profiles (account_id, external_id, email, traits)
            VALUES ($1, $2, $3, $4)
@@ -48,7 +55,7 @@ export class IngestionService {
           `INSERT INTO events (account_id, profile_id, name, properties, message_id, occurred_at)
            VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
            ON CONFLICT (account_id, message_id) WHERE message_id IS NOT NULL
-           DO UPDATE SET message_id = EXCLUDED.message_id
+           DO NOTHING
            RETURNING id`,
           [
             accountId,
@@ -65,14 +72,12 @@ export class IngestionService {
             input.timestamp ?? null
           ]
         );
-        if (event.rows.length > 0) {
-          return { eventId: event.rows[0].id, created: true };
-        }
-        const existing = await client.query<{ id: string }>(
-          'SELECT id FROM events WHERE account_id = $1 AND message_id = $2',
-          [accountId, input.messageId]
+        if (!event.rows[0]) return { eventId: undefined, created: false };
+        await client.query(
+          'INSERT INTO event_outbox (event_id) VALUES ($1) ON CONFLICT (event_id) DO NOTHING',
+          [event.rows[0].id]
         );
-        return { eventId: existing.rows[0]?.id, created: false };
+        return { eventId: event.rows[0].id, created: true };
       });
       if (!result.eventId || !result.created) {
         return { accepted: true, eventId: result.eventId };

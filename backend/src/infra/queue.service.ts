@@ -6,13 +6,14 @@ import Redis from 'ioredis';
 @Injectable()
 export class QueueService implements OnModuleDestroy {
   private readonly events: Queue;
+  private readonly connection: Redis;
 
   constructor(configService: ConfigService) {
-    const connection = new Redis(configService.getOrThrow<string>('REDIS_URL'), {
-      maxRetriesPerRequest: null
+    this.connection = new Redis(configService.getOrThrow<string>('REDIS_URL'), {
+      maxRetriesPerRequest: 3
     });
     this.events = new Queue('events', {
-      connection,
+      connection: this.connection,
       prefix: configService.get<string>('BULLMQ_PREFIX', 'bull')
     });
   }
@@ -23,5 +24,6 @@ export class QueueService implements OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.events.close();
+    await this.connection.quit();
   }
 }

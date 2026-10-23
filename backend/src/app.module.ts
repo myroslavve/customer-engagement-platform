@@ -10,6 +10,7 @@ import { HealthController } from './health/health.controller';
 import { DatabaseService } from './infra/database.service';
 import { QueueService } from './infra/queue.service';
 import { RedisService } from './infra/redis.service';
+import { OutboxService } from './infra/outbox.service';
 import { IngestionController } from './ingestion/ingestion.controller';
 import { IngestionService } from './ingestion/ingestion.service';
 import { ApiKeyGuard } from './ingestion/api-key.guard';
@@ -30,6 +31,7 @@ import { ApiKeyGuard } from './ingestion/api-key.guard';
     DatabaseService,
     RedisService,
     QueueService,
+    OutboxService,
     IngestionService,
     ApiKeyGuard,
     AdminAuthGuard,

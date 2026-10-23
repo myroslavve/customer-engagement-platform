@@ -36,3 +36,8 @@ CREATE INDEX IF NOT EXISTS events_profile_occurred_idx
 
 CREATE UNIQUE INDEX IF NOT EXISTS events_account_message_unique
   ON events (account_id, message_id) WHERE message_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS event_outbox (
+  event_id UUID PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

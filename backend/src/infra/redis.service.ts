@@ -5,16 +5,23 @@ import Redis from 'ioredis';
 @Injectable()
 export class RedisService implements OnModuleDestroy {
   readonly client: Redis;
+  private inFlightPing?: Promise<void>;
 
   constructor(configService: ConfigService) {
     this.client = new Redis(configService.getOrThrow<string>('REDIS_URL'));
   }
 
   async healthcheck(timeoutMs = 2_000): Promise<void> {
+    this.inFlightPing ??= this.client
+      .ping()
+      .then(() => undefined)
+      .finally(() => {
+        this.inFlightPing = undefined;
+      });
     let timer: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
-        this.client.ping(),
+        this.inFlightPing,
         new Promise<never>((_, reject) => {
           timer = setTimeout(
             () => reject(new Error('Redis health check timed out')),
