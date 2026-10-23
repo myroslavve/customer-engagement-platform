@@ -10,11 +10,11 @@ export class QueueService implements OnModuleDestroy {
 
   constructor(configService: ConfigService) {
     this.connection = new Redis(configService.getOrThrow<string>('REDIS_URL'), {
-      maxRetriesPerRequest: 3
+      maxRetriesPerRequest: 3,
     });
     this.events = new Queue('events', {
       connection: this.connection,
-      prefix: configService.get<string>('BULLMQ_PREFIX', 'bull')
+      prefix: configService.get<string>('BULLMQ_PREFIX', 'bull'),
     });
   }
 

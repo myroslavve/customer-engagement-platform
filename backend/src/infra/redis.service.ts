@@ -23,11 +23,8 @@ export class RedisService implements OnModuleDestroy {
       await Promise.race([
         this.inFlightPing,
         new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error('Redis health check timed out')),
-            timeoutMs
-          );
-        })
+          timer = setTimeout(() => reject(new Error('Redis health check timed out')), timeoutMs);
+        }),
       ]);
     } finally {
       if (timer) clearTimeout(timer);

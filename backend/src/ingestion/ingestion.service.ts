@@ -11,7 +11,7 @@ export class IngestionService {
     private readonly config: ConfigService,
     private readonly database: DatabaseService,
     private readonly redis: RedisService,
-    private readonly queue: QueueService
+    private readonly queue: QueueService,
   ) {}
 
   identify(input: IdentifyDto) {
@@ -33,7 +33,7 @@ export class IngestionService {
       const result = await this.database.transaction(async (client) => {
         const existingEvent = await client.query<{ id: string }>(
           'SELECT id FROM events WHERE account_id = $1 AND message_id = $2',
-          [accountId, input.messageId]
+          [accountId, input.messageId],
         );
         if (existingEvent.rows[0]) {
           return { eventId: existingEvent.rows[0].id, created: false };
@@ -47,9 +47,9 @@ export class IngestionService {
           [
             accountId,
             input.userId,
-            'email' in input ? input.email ?? null : null,
-            JSON.stringify('traits' in input ? input.traits ?? {} : {})
-          ]
+            'email' in input ? (input.email ?? null) : null,
+            JSON.stringify('traits' in input ? (input.traits ?? {}) : {}),
+          ],
         );
         const event = await client.query<{ id: string }>(
           `INSERT INTO events (account_id, profile_id, name, properties, message_id, occurred_at)
@@ -63,19 +63,19 @@ export class IngestionService {
             type === 'track' ? (input as TrackDto).eventName : 'identify',
             JSON.stringify(
               type === 'track'
-                ? (input as TrackDto).properties ?? {}
+                ? ((input as TrackDto).properties ?? {})
                 : 'traits' in input
-                  ? input.traits ?? {}
-                  : {}
+                  ? (input.traits ?? {})
+                  : {},
             ),
             input.messageId,
-            input.timestamp ?? null
-          ]
+            input.timestamp ?? null,
+          ],
         );
         if (!event.rows[0]) return { eventId: undefined, created: false };
         await client.query(
           'INSERT INTO event_outbox (event_id) VALUES ($1) ON CONFLICT (event_id) DO NOTHING',
-          [event.rows[0].id]
+          [event.rows[0].id],
         );
         return { eventId: event.rows[0].id, created: true };
       });

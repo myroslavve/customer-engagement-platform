@@ -14,8 +14,8 @@ permissions:
   packages: write
 
 jobs:
-  image:
-    name: Build and push application image
+  backend-image:
+    name: Build and push backend image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,14 +28,14 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository }}/backend
           tags: |
             type=sha
             type=ref,event=branch
             type=semver,pattern={{version}}
       - uses: docker/build-push-action@v6
         with:
-          context: .
+          context: backend
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

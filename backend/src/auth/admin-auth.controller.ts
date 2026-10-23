@@ -21,7 +21,7 @@ export class AdminAuthController {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly jwt: JwtService
+    private readonly jwt: JwtService,
   ) {}
 
   @Post('login')
@@ -31,7 +31,7 @@ export class AdminAuthController {
     const configuredHash = this.config.getOrThrow<string>('ADMIN_PASSWORD_HASH');
     const passwordMatches = await compare(
       input.password,
-      input.email === configuredEmail ? configuredHash : this.dummyPasswordHash
+      input.email === configuredEmail ? configuredHash : this.dummyPasswordHash,
     );
     if (input.email !== configuredEmail || !passwordMatches) {
       throw new UnauthorizedException('Invalid credentials');
@@ -39,8 +39,8 @@ export class AdminAuthController {
     return {
       accessToken: this.jwt.sign(
         { sub: input.email, role: 'admin' },
-        { secret: this.config.getOrThrow<string>('JWT_SECRET'), expiresIn: '8h' }
-      )
+        { secret: this.config.getOrThrow<string>('JWT_SECRET'), expiresIn: '8h' },
+      ),
     };
   }
 }

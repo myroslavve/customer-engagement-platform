@@ -1,32 +1,17 @@
 # Customer Engagement Platform
 
-Backend for automating email campaigns: ingest user events, run marketer-defined workflows, send emails.
-Monolith: one NestJS application (`src/main.ts`) serving the HTTP API and running the BullMQ queue
-consumers in the same process, backed by PostgreSQL and Redis. Architecture diagrams: `documentation/*.puml`.
+Automates email campaigns: ingest user events, run marketer-defined workflows, send emails.
 
-## Local setup
+## Repository layout
 
-```bash
-cp .env.example .env
-docker compose up -d
-npm install
-npm run migration:run
-npm run start
-```
-
-docker-compose publishes PostgreSQL on host port 5440 and Redis on 6390 (not the defaults, so it does
-not clash with other local projects).
-
-## Scripts
-
-- `npm run start` / `npm run start:dev` — run the application (HTTP API + queue consumers)
-- `npm run migration:run` / `migration:revert` / `migration:generate -- src/database/migrations/<Name>`
-- `npm run lint`, `npm run format` / `format:check`, `npm run typecheck`, `npm test`
-- `npm run start:prod` / `migration:run:prod` — run from the compiled `dist/` (Docker image)
+- `backend/` — NestJS monolith: HTTP API (ingestion, admin) and BullMQ queue processors in one
+  process, backed by PostgreSQL and Redis. See `backend/README.md`.
+- `frontend/` — Admin UI (added separately).
+- `documentation/` — C4 architecture diagrams (`*.puml`).
+- `docker-compose.yml` — local PostgreSQL (`127.0.0.1:5440`) and Redis (`127.0.0.1:6390`).
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` (PRs and `main`): format check, lint, typecheck, build, tests.
-- `.github/workflows/cd.yml` (`main` and `v*` tags): builds the application image from `Dockerfile`
-  and pushes it to `ghcr.io/<owner>/<repo>` (tags: commit sha, branch, semver).
-  Run `npm run migration:run:prod` from the image before rolling out a new version.
+- `.github/workflows/ci.yml` (PRs and `main`): backend format check, lint, typecheck, build, tests.
+- `.github/workflows/cd.yml` (`main` and `v*` tags): builds the backend image from `backend/Dockerfile`
+  and pushes it to `ghcr.io/<owner>/<repo>/backend` (tags: commit sha, branch, semver).

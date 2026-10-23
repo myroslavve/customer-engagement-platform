@@ -6,7 +6,7 @@ import { JwtService } from '@nestjs/jwt';
 export class AdminAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -18,7 +18,7 @@ export class AdminAuthGuard implements CanActivate {
     if (!token) throw new UnauthorizedException('Missing bearer token');
     try {
       const payload = this.jwt.verify<{ role?: string }>(token, {
-        secret: this.config.getOrThrow<string>('JWT_SECRET')
+        secret: this.config.getOrThrow<string>('JWT_SECRET'),
       });
       if (payload.role !== 'admin') throw new UnauthorizedException('Admin role required');
       request.user = payload;

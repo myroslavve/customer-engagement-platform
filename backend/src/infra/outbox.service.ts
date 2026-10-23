@@ -10,14 +10,14 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly database: DatabaseService,
-    private readonly queue: QueueService
+    private readonly queue: QueueService,
   ) {}
 
   onModuleInit(): void {
     void this.publishPending().catch((error) => {
       this.logger.error(
         { message: 'Initial event outbox publish failed' },
-        error instanceof Error ? error.stack : undefined
+        error instanceof Error ? error.stack : undefined,
       );
     });
     this.timer = setInterval(() => void this.publishPending(), 5_000);
@@ -28,18 +28,16 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       const { rows } = await this.database.query<{ event_id: string }>(
-        'SELECT event_id FROM event_outbox ORDER BY created_at LIMIT 100'
+        'SELECT event_id FROM event_outbox ORDER BY created_at LIMIT 100',
       );
       for (const row of rows) {
         try {
           await this.queue.publishProcessEvent(row.event_id);
-          await this.database.query('DELETE FROM event_outbox WHERE event_id = $1', [
-            row.event_id
-          ]);
+          await this.database.query('DELETE FROM event_outbox WHERE event_id = $1', [row.event_id]);
         } catch (error) {
           this.logger.error(
             { message: 'Failed to publish event outbox entry', eventId: row.event_id },
-            error instanceof Error ? error.stack : undefined
+            error instanceof Error ? error.stack : undefined,
           );
         }
       }

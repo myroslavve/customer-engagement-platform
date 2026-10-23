@@ -11,12 +11,12 @@ export class DatabaseService implements OnModuleDestroy {
     this.pool = new Pool({
       connectionString: configService.getOrThrow<string>('DATABASE_URL'),
       connectionTimeoutMillis: 2_000,
-      statement_timeout: 2_000
+      statement_timeout: 2_000,
     });
     this.pool.on('error', (error) => {
       this.logger.error(
         { message: 'Idle PostgreSQL client error', error: error.message },
-        error.stack
+        error.stack,
       );
     });
   }
@@ -40,7 +40,7 @@ export class DatabaseService implements OnModuleDestroy {
         releaseError = rollbackError as Error;
         this.logger.error(
           { message: 'ROLLBACK failed', error: releaseError.message },
-          releaseError.stack
+          releaseError.stack,
         );
       }
       throw error;

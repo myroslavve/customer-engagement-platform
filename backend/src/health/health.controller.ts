@@ -9,7 +9,7 @@ export class HealthController {
   private readonly logger = new Logger(HealthController.name);
   constructor(
     private readonly database: DatabaseService,
-    private readonly redis: RedisService
+    private readonly redis: RedisService,
   ) {}
 
   @Get()
@@ -17,7 +17,7 @@ export class HealthController {
     try {
       const results = await Promise.allSettled([
         this.database.healthcheck(),
-        this.redis.healthcheck(2_000)
+        this.redis.healthcheck(2_000),
       ]);
       const database = results[0].status === 'fulfilled' ? 'ok' : 'unavailable';
       const redis = results[1].status === 'fulfilled' ? 'ok' : 'unavailable';
@@ -25,7 +25,7 @@ export class HealthController {
         this.logger.error({
           message: 'Dependency health check failed',
           database,
-          redis
+          redis,
         });
         throw new ServiceUnavailableException({ status: 'unavailable', database, redis });
       }
@@ -35,7 +35,7 @@ export class HealthController {
       throw new ServiceUnavailableException({
         status: 'unavailable',
         database: 'unknown',
-        redis: 'unknown'
+        redis: 'unknown',
       });
     }
   }
