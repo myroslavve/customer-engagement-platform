@@ -1,5 +1,6 @@
 import { Column, Entity, ForeignKey, Index, Unique } from 'typeorm';
 import { RunStatus } from '../../enums/run-status.enum';
+import type { RunState } from '../../types/run-state.types';
 import { AbstractEntity } from './abstract.entity';
 import { Account } from './account.entity';
 import { Profile } from './profile.entity';
@@ -38,6 +39,6 @@ export class WorkflowRun extends AbstractEntity {
   @Column({ type: 'text', nullable: true }) waitingForEvent: string | null;
   @Column({ type: 'timestamptz', nullable: true }) waitUntil: Date | null;
   @Column({ type: 'text', nullable: true }) claimKey: string | null;
-  @Column({ type: 'jsonb', default: () => "'{}'" }) context: Record<string, unknown>;
+  @Column({ type: 'jsonb', default: () => "'{}'" }) context: RunState;
   @Column({ type: 'timestamptz', nullable: true }) finishedAt: Date | null;
 }
