@@ -38,7 +38,7 @@ package "workflow execution" {
     +build(run: WorkflowRun, job: StepJob): Promise<RunContext>
   }
   class StepRecorder {
-    +recordCompleted(run, job, node, output: RunStepOutput): Promise<RunStep>
+    +recordCompleted(run, job, node, output: RunStepOutput): Promise<RunStep | null>
     +recordFailed(run, job, nodeType, error: Error): Promise<boolean>
   }
   class FollowUpScheduler {
@@ -106,6 +106,7 @@ package "shared" {
     +findById(runId: string): Promise<WorkflowRun>
     +findWaiting(accountId: string, profileId: string, eventName: string, eventId: string): Promise<WorkflowRun[]>
     +claim(runId: string, nodeId: string, claimKey: string): Promise<boolean>
+    +saveTransition(run: WorkflowRun, fromNodeId: string, tx?): Promise<boolean>
     +markFailed(runId: string, nodeId: string, error: string, tx?): Promise<boolean>
     +save(run: WorkflowRun): Promise<void>
   }
@@ -160,7 +161,7 @@ StepNodeResolver --> StepExecutorRegistry : executor for node type
 StepContextBuilder --> ProfileRepository : profile
 StepContextBuilder --> EventRepository : event that last touched the run
 StepRecorder --> RunStepRepository : step row
-StepRecorder --> RunRepository : save run / mark failed
+StepRecorder --> RunRepository : guarded save transition / mark failed
 StepRecorder --> RunTransition : apply result to run
 FollowUpScheduler --> QueueProducer : next step / delayed step / wait timeout
 StepExecutorRegistry --> StepExecutor

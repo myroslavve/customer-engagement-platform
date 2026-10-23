@@ -13,8 +13,9 @@ import { RunRepository } from '../workflows/run.repository';
 import { applyStepOutput } from './run-transition';
 
 /**
- * Persists step outcomes: the run_steps row and the run update in one transaction. The row goes
- * first, so a duplicate job blocks on uq_run_steps_job_id and never touches the run.
+ * Persists step outcomes: the run update and the run_steps row in one transaction. The run update
+ * goes first and is guarded (RunRepository.saveTransition), so a duplicate job or a run changed
+ * while the step executed (failed, cancelled) records nothing.
  */
 @Injectable()
 export class StepRecorder {
@@ -25,13 +26,16 @@ export class StepRecorder {
     private readonly runStepRepository: RunStepRepository,
   ) {}
 
-  /** The recorded step; the one a duplicate job committed first when it won the race. */
+  /**
+   * The recorded step (the one a duplicate job committed first when it won the race), or null when
+   * the run moved on while the step executed.
+   */
   async recordCompleted(
     run: WorkflowRun,
     job: StepJob,
     node: WorkflowNode,
     output: RunStepOutput,
-  ): Promise<RunStep> {
+  ): Promise<RunStep | null> {
     try {
       return await this.insertCompleted(run, job, node, output);
     } catch (error) {
@@ -68,13 +72,20 @@ export class StepRecorder {
     job: StepJob,
     node: WorkflowNode,
     output: RunStepOutput,
-  ): Promise<RunStep> {
+  ): Promise<RunStep | null> {
     const input = this.stepInput(job, node.type, RunStepStatus.Completed, output, null);
     return this.runRepository.transaction(async (transaction) => {
-      const step = await this.runStepRepository.create(input, transaction);
       applyStepOutput(run, job, output, new Date());
-      await this.runRepository.save(run, transaction);
-      return step;
+      const saved = await this.runRepository.saveTransition(run, job.nodeId, transaction);
+      if (!saved) {
+        this.logger.debug({
+          message: 'Run moved on while the step executed, step not recorded',
+          runId: run.id,
+          nodeId: job.nodeId,
+        });
+        return null;
+      }
+      return this.runStepRepository.create(input, transaction);
     });
   }
 

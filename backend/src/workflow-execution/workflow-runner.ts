@@ -49,6 +49,7 @@ export class WorkflowRunner {
 
     const output = toStepOutput(result, new Date());
     const completedStep = await this.stepRecorder.recordCompleted(run, job, step.node, output);
+    if (!completedStep) return;
     await this.followUpScheduler.schedule(completedStep);
   }
 
