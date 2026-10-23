@@ -21,7 +21,7 @@ async function main(): Promise<void> {
     { eventId },
     { jobId: processEventJobId({ eventId }) },
   );
-  console.log(`Enqueued ${job.name} job ${job.id}`);
+  console.log('Enqueued job', { name: job.name, id: job.id });
   await queue.close();
 }
 

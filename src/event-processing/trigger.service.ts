@@ -44,13 +44,19 @@ export class TriggerService {
       });
 
       if (!run) {
-        this.logger.log(
-          `Skipped workflow ${version.workflowId} for profile ${profile.id}: a live run already exists`,
-        );
+        this.logger.log('Run not started: a live run already exists', {
+          workflowId: version.workflowId,
+          profileId: profile.id,
+          eventId: event.id,
+        });
         continue;
       }
       if (run.status !== RunStatus.Running) {
-        this.logger.error(`Run ${run.id} created as ${run.status}: ${JSON.stringify(run.context)}`);
+        this.logger.error('Run not started: created in a terminal status', {
+          runId: run.id,
+          status: run.status,
+          context: run.context,
+        });
         continue;
       }
       await this.queueProducer.enqueueStep({
