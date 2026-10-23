@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Job } from 'bullmq';
+import { Job, UnrecoverableError } from 'bullmq';
 import { AppConfig } from '../config/configuration';
 import { ProcessEventJob } from '../types/job.types';
 import { QUEUE_EVENTS } from '../queues/queue-names';
@@ -62,6 +62,13 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
     if (!event) throw new Error(`Event ${eventId} not found`);
     const profile = await this.profileRepository.findById(event.profileId);
     if (!profile) throw new Error(`Profile ${event.profileId} not found for event ${event.id}`);
+    // FKs are single-column, so only this check stops a producer bug from starting cross-tenant
+    // runs. Retrying cannot fix it, so the job fails at once.
+    if (profile.accountId !== event.accountId) {
+      throw new UnrecoverableError(
+        `Profile ${profile.id} does not belong to account ${event.accountId} of event ${event.id}`,
+      );
+    }
 
     await this.triggerService.startMatchingRuns(event, profile);
     await this.waitingRunService.resumeWaitingRuns(event, profile);
