@@ -7,7 +7,7 @@ AddBoundaryTag("ui", $borderColor="#1565C0", $fontColor="#1565C0", $borderThickn
 AddComponentTag("page", $bgColor="#42A5F5", $borderColor="#1565C0", $fontColor="#ffffff", $legendText="admin page component")
 
 Person(marketer, "Marketing manager", "Creates templates, audiences and workflows; reviews activity.")
-Container_Ext(api, "API Server", "Node.js REST API", "Admin API protected by JWT authentication.")
+Container_Ext(api, "Application", "Node.js, NestJS REST API", "Admin API protected by JWT authentication.")
 
 Container_Boundary(adminUi, "Admin UI - React SPA", $tags="ui") {
   Component(authPage, "Authentication Page", "React page", "Signs in the marketer and establishes the JWT session.", $tags="page")
@@ -15,7 +15,7 @@ Container_Boundary(adminUi, "Admin UI - React SPA", $tags="ui") {
   Component(audiencesPage, "Audiences Page", "React page", "Defines simple audience conditions and previews matching users.", $tags="page")
   Component(workflowsPage, "Workflows Page", "React page", "Defines and publishes the linear Trigger -> Delay -> Send workflow.", $tags="page")
   Component(activityPage, "Activity Page", "React page", "Displays workflow runs, message statuses, timestamps and failures.", $tags="page")
-  Component(apiClient, "Admin API Client", "TypeScript service", "Sends authenticated REST/JSON requests to the API Server.")
+  Component(apiClient, "Admin API Client", "TypeScript service", "Sends authenticated REST/JSON requests to the Application.")
 }
 
 Rel(marketer, authPage, "Signs in", "Browser")

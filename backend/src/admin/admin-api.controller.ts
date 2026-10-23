@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  NotImplementedException,
-  UseGuards
-} from '@nestjs/common';
+import { Controller, Get, NotImplementedException, UseGuards } from '@nestjs/common';
 import { AdminAuthGuard } from '../auth/admin-auth.guard';
 
 @Controller('admin')

@@ -11,74 +11,90 @@ class Database <<PostgreSQL>> {
 }
 
 class Redis <<BullMQ / Redis>> {
-  +set(key: string, value: string): Promise<void>
-  +get(key: string): Promise<string>
+  +set(key: string, value: string, NX, EX): Promise<string | null>
+  +del(key: string): Promise<void>
 }
 
 package "Public Ingestion API" {
-  class IdentifyController {
-    +identify(request: object): Promise<object>
+  class IngestionController {
+    +identify(dto: IdentifyDto): Promise<IngestionResult>
+    +track(dto: TrackDto): Promise<IngestionResult>
   }
 
-  class TrackController {
-    +track(request: object): Promise<object>
+  class ApiKeyGuard {
+    +canActivate(context): boolean
+  }
+
+  class ValidationPipe <<NestJS>> {
+    +transform(dto): IdentifyDto | TrackDto
   }
 
   class IngestionService {
-    +identify(request: object): Promise<object>
-    +track(request: object): Promise<object>
-  }
-
-  class PayloadValidator {
-    +validateIdentify(request: object): void
-    +validateTrack(request: object): void
+    +identify(dto: IdentifyDto): Promise<IngestionResult>
+    +track(dto: TrackDto): Promise<IngestionResult>
   }
 
   class IdempotencyService {
-    +hasProcessed(messageId: string): Promise<boolean>
-    +markProcessed(messageId: string): Promise<void>
+    +claim(accountId: string, messageId: string): Promise<boolean>
+    +release(accountId: string, messageId: string): Promise<void>
   }
 
   class ProfileRepository {
-    +upsert(profile: object): Promise<void>
-    +findById(userId: string): Promise<object>
+    +upsert(profile: UpsertProfileInput, tx?): Promise<string>
+    +findById(profileId: string, tx?): Promise<Profile | null>
   }
 
   class EventRepository {
-    +create(event: object): Promise<object>
+    +findByMessageId(accountId: string, messageId: string, tx?): Promise<UserEvent | null>
+    +createIfAbsent(event: CreateEventInput, tx?): Promise<string | null>
+  }
+
+  class EventOutboxRepository {
+    +add(eventId: string, tx?): Promise<void>
+    +findPending(limit: number): Promise<EventOutbox[]>
+    +removeByEventId(eventId: string): Promise<void>
+  }
+
+  class OutboxService {
+    +publishPending(): Promise<void>
   }
 
   class QueueProducer {
-    +publishProcessEvent(eventId: string): Promise<void>
+    +enqueueProcessEvent(job: ProcessEventJob): Promise<void>
   }
 
-  IdentifyController --> IngestionService
-  TrackController --> IngestionService
-  IngestionService --> PayloadValidator
+  IngestionController --> ApiKeyGuard
+  IngestionController --> ValidationPipe
+  IngestionController --> IngestionService
   IngestionService --> IdempotencyService
   IngestionService --> ProfileRepository
   IngestionService --> EventRepository
+  IngestionService --> EventOutboxRepository : add / remove
   IngestionService --> QueueProducer
+  OutboxService --> EventOutboxRepository
+  OutboxService --> QueueProducer
   IdempotencyService --> Redis
   ProfileRepository --> Database
   EventRepository --> Database
+  EventOutboxRepository --> Database
   QueueProducer --> Redis : queue.add("process-event")
-
-  IdentifyController -[hidden]right-> TrackController
-  TrackController -[hidden]right-> IngestionService
-  IngestionService -[hidden]right-> PayloadValidator
-  IdentifyController -[hidden]down-> IdempotencyService
-  IdempotencyService -[hidden]right-> ProfileRepository
-  ProfileRepository -[hidden]right-> EventRepository
-  EventRepository -[hidden]right-> QueueProducer
 }
 
 note right of IngestionService
   POST /api/v1/identify
   POST /api/v1/track
 
-  Validate -> dedupe -> persist ->
-  enqueue process-event
+  Validate -> dedupe (claim messageId) ->
+  persist profile + event + outbox row
+  in one transaction -> enqueue process-event ->
+  delete the outbox row (best effort).
+  Failure releases the claim (client may retry).
+end note
+
+note bottom of OutboxService
+  Every 5 s re-adds process-event for outbox rows
+  (deterministic jobId, so no duplicates) and deletes
+  them; covers a crash between commit and enqueue.
 end note
 
 @enduml

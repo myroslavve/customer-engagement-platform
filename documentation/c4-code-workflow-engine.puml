@@ -1,5 +1,5 @@
 @startuml C4_L4_Worker
-title Customer Engagement Platform - Worker - Code (L4)
+title Customer Engagement Platform - Application: workflow engine - Code (L4)
 
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
@@ -11,10 +11,10 @@ package "event processing" {
     +process(job: ProcessEventJob): Promise<void>
   }
   class TriggerService {
-    +startMatchingRuns(event: UserEvent): Promise<void>
+    +startMatchingRuns(event: UserEvent, profile: UserProfile): Promise<void>
   }
   class WaitingRunService {
-    +resumeWaitingRuns(event: UserEvent): Promise<void>
+    +resumeWaitingRuns(event: UserEvent, profile: UserProfile): Promise<void>
   }
 }
 
@@ -56,22 +56,35 @@ package "shared" {
     +evaluate(condition: Condition, ctx: RunContext): boolean
   }
   class QueueProducer {
+    +enqueueProcessEvent(job: ProcessEventJob): Promise<void>
     +enqueueStep(job: StepJob, delayMs?: number): Promise<void>
     +enqueueEmail(job: EmailSendJob): Promise<void>
   }
+  abstract class "AbstractRepository<T>" as AbstractRepository {
+    +transaction(work: (tx) => Promise<R>): Promise<R>
+    +find(options, tx?): Promise<T[]>
+    +findOne(options, tx?): Promise<T | null>
+    +findById(id: string, tx?): Promise<T | null>
+    +findByIdOrFail(id: string, tx?): Promise<T>
+    +save(entity, tx?): Promise<T>
+  }
   class WorkflowRepository {
-    +findActiveByTrigger(eventName: string): Promise<WorkflowVersion[]>
+    +findActiveByTrigger(accountId: string, eventName: string): Promise<WorkflowVersion[]>
     +getVersion(versionId: string): Promise<WorkflowVersion>
+    +getVersions(versionIds: string[]): Promise<Map<string, WorkflowVersion>>
   }
   class RunRepository {
-    +create(run: object): Promise<WorkflowRun>
+    +createIfAbsent(run: object): Promise<WorkflowRun | null>
     +findById(runId: string): Promise<WorkflowRun>
-    +findWaiting(profileId: string, eventName: string): Promise<WorkflowRun[]>
-    +claim(runId: string, nodeId: string): Promise<boolean>
+    +findWaiting(accountId: string, profileId: string, eventName: string, eventId: string): Promise<WorkflowRun[]>
+    +claim(runId: string, nodeId: string, claimKey: string): Promise<boolean>
     +save(run: WorkflowRun): Promise<void>
   }
   class ProfileRepository {
     +findById(profileId: string): Promise<UserProfile>
+  }
+  class EventRepository {
+    +findById(eventId: string): Promise<UserEvent>
   }
   class MessageRepository {
     +create(message: object): Promise<Message>
@@ -85,6 +98,8 @@ class EmailDeliveryProvider <<external API>>
 
 ' ---- event processing ----
 Redis --> EventsProcessor : process-event jobs
+EventsProcessor --> EventRepository : load event
+EventsProcessor --> ProfileRepository : load profile
 EventsProcessor --> TriggerService : new event
 EventsProcessor --> WaitingRunService : new event
 TriggerService --> WorkflowRepository : find workflows by trigger
@@ -125,12 +140,29 @@ QueueProducer -[norank]-> Redis : queue.add()
 WorkflowRepository --> Database
 RunRepository --> Database
 ProfileRepository --> Database
+EventRepository --> Database
 MessageRepository --> Database
+AbstractRepository <|-- WorkflowRepository
+AbstractRepository <|-- RunRepository
+AbstractRepository <|-- ProfileRepository
+AbstractRepository <|-- EventRepository
+
+note bottom of AbstractRepository
+  Every repository method takes an optional
+  transaction (tx); without it the call runs
+  on the default connection.
+end note
 
 note right of RunRepository
-  claim() is an atomic conditional update:
-  only one of "event arrived" / "timeout"
-  can continue a waiting run
+  claim() is an atomic conditional update keyed by
+  the step job id (claimKey): only one of
+  "event arrived" / "timeout" can continue a waiting
+  run, and a retried job can re-win its own claim.
+end note
+
+note right of StepsProcessor
+  StepJob = { runId, nodeId, cause: enter | event | timeout, eventId? }
+  jobId = runId__nodeId__cause[__eventId]
 end note
 
 

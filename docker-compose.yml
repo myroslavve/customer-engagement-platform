@@ -2,27 +2,33 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: cep
       POSTGRES_USER: cep
       POSTGRES_PASSWORD: cep
+      POSTGRES_DB: cep
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      - '127.0.0.1:5440:5432'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cep -d cep"]
+      test: ['CMD-SHELL', 'pg_isready -U cep -d cep']
       interval: 5s
       timeout: 3s
       retries: 10
     volumes:
-      - cep-postgres:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+
   redis:
     image: redis:7-alpine
+    # Append-only file, so queued and delayed BullMQ jobs survive an unclean stop.
+    command: ['redis-server', '--appendonly', 'yes']
     ports:
-      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+      - '127.0.0.1:6390:6379'
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 10
+    volumes:
+      - redisdata:/data
 
 volumes:
-  cep-postgres:
+  pgdata:
+  redisdata:

@@ -1,11 +1,4 @@
-import {
-  IsEmail,
-  IsISO8601,
-  IsObject,
-  IsOptional,
-  IsString,
-  Length
-} from 'class-validator';
+import { IsEmail, IsISO8601, IsObject, IsOptional, IsString, Length } from 'class-validator';
 
 export class IngestionDto {
   @IsString()
