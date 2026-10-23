@@ -39,7 +39,7 @@ Run from `backend/` unless noted (commands work in bash and PowerShell).
 
    ```bash
    npm run migration:run
-   docker compose exec postgres psql -U cep -d cep -tAc "SELECT account_id FROM admin_users WHERE email = 'admin@example.com'"
+   docker compose exec postgres psql -U cep -d cep -tAc "SELECT account_id FROM admin_users ORDER BY created_at DESC LIMIT 1"
    ```
 
 5. Set `INGESTION_API_KEY`, `INGESTION_ACCOUNT_ID`, and `JWT_SECRET`, then run the application:

@@ -73,11 +73,17 @@ export class AdminApi1761220000000 implements MigrationInterface {
     )) as Array<{ account_id: string }>;
     if (existing[0]) return;
 
-    const accountName = process.env.ADMIN_ACCOUNT_NAME?.trim() || 'Default account';
     const accounts = (await queryRunner.query(
-      `INSERT INTO "accounts" ("name") VALUES ($1) RETURNING "id"`,
-      [accountName],
+      `SELECT id FROM "accounts" ORDER BY created_at ASC LIMIT 1`,
     )) as Array<{ id: string }>;
+    if (accounts.length === 0) {
+      const accountName = process.env.ADMIN_ACCOUNT_NAME?.trim() || 'Default account';
+      accounts.push(
+        ...((await queryRunner.query(`INSERT INTO "accounts" ("name") VALUES ($1) RETURNING "id"`, [
+          accountName,
+        ])) as Array<{ id: string }>),
+      );
+    }
     await queryRunner.query(
       `INSERT INTO "admin_users" ("account_id", "email", "password_hash")
        VALUES ($1, $2, $3)`,
