@@ -1,0 +1,57 @@
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Job, UnrecoverableError } from 'bullmq';
+import { AppConfig } from '../config/configuration';
+import { isFinalAttempt } from '../queues/job-attempts';
+import { QUEUE_WORKFLOW_STEPS } from '../queues/queue-names';
+import { StepJob } from '../types/job.types';
+import { WorkflowRunner } from './workflow-runner';
+
+@Processor(QUEUE_WORKFLOW_STEPS)
+export class StepsProcessor extends WorkerHost implements OnApplicationBootstrap {
+  private readonly logger = new Logger(StepsProcessor.name);
+
+  constructor(
+    private readonly configService: ConfigService<AppConfig, true>,
+    private readonly workflowRunner: WorkflowRunner,
+  ) {
+    super();
+  }
+
+  /** The BullMQ worker is created by @nestjs/bullmq during module init; concurrency is set after. */
+  onApplicationBootstrap(): void {
+    this.worker.concurrency = this.configService.get('queue', { infer: true }).stepsConcurrency;
+    this.logger.log({
+      message: 'Consuming queue',
+      queue: QUEUE_WORKFLOW_STEPS,
+      concurrency: this.worker.concurrency,
+    });
+  }
+
+  /**
+   * Transient errors are retried by BullMQ and, once exhausted, leave the run where it is (the job
+   * stays in the failed set and can be retried). Only UnrecoverableError fails the run.
+   */
+  async process(job: Job<StepJob, void, string>): Promise<void> {
+    try {
+      await this.workflowRunner.run(job.data);
+    } catch (error) {
+      const final = isFinalAttempt(job, error);
+      const details = {
+        message: final ? 'execute-step failed' : 'execute-step attempt failed, will retry',
+        jobId: job.id,
+        runId: job.data.runId,
+        nodeId: job.data.nodeId,
+        cause: job.data.cause,
+        attempt: job.attemptsStarted,
+        maxAttempts: job.opts.attempts ?? 1,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      if (final) this.logger.error(details, error instanceof Error ? error.stack : undefined);
+      else this.logger.warn(details);
+      if (error instanceof UnrecoverableError) await this.workflowRunner.fail(job.data, error);
+      throw error;
+    }
+  }
+}
