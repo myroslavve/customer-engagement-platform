@@ -39,8 +39,6 @@ This directory contains the API and its infrastructure integration. Worker imple
 6. Run the API:
 
    ```powershell
-   cd backend
-   npm install
    npm run start:dev
    ```
 
