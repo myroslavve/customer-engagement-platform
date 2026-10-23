@@ -1,5 +1,5 @@
 import { Column, Entity, Index, Unique } from 'typeorm';
-import type { WorkflowDefinition } from '../../workflows/definition';
+import type { WorkflowDefinition } from '../../types/workflow-definition.types';
 import { AbstractEntity } from './abstract.entity';
 
 @Entity({ name: 'workflow_versions' })

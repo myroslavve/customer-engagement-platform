@@ -3,7 +3,7 @@ import { Inject, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { Job } from 'bullmq';
 import { queueConfig } from '../config/queue.config';
-import { ProcessEventJob } from '../queues/jobs';
+import { ProcessEventJob } from '../types/job.types';
 import { QUEUE_EVENTS } from '../queues/queue-names';
 import { EventRepository } from '../workflows/event.repository';
 import { ProfileRepository } from '../workflows/profile.repository';

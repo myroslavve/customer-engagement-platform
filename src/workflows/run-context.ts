@@ -1,20 +1,6 @@
 import { Profile } from '../database/entities/profile.entity';
 import { UserEvent } from '../database/entities/user-event.entity';
-
-export interface RunContext {
-  profile: {
-    id: string;
-    externalId: string;
-    email: string | null;
-    traits: Record<string, unknown>;
-  };
-  event: {
-    id: string;
-    name: string;
-    properties: Record<string, unknown>;
-    occurredAt: string;
-  } | null;
-}
+import { RunContext } from '../types/run-context.types';
 
 export function buildRunContext(profile: Profile, event: UserEvent | null): RunContext {
   return {

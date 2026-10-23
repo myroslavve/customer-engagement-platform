@@ -1,13 +1,6 @@
 import { Column, Entity, Index, Unique } from 'typeorm';
+import { RunStatus } from '../../enums/run-status.enum';
 import { AbstractEntity } from './abstract.entity';
-
-export enum RunStatus {
-  Running = 'running',
-  Waiting = 'waiting',
-  Completed = 'completed',
-  Failed = 'failed',
-  Cancelled = 'cancelled',
-}
 
 /**
  * createdAt is when the run started. The partial unique index on live runs per (workflow, profile)

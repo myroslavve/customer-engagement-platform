@@ -2,20 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
-import { AbstractRepository, Transaction } from '../database/abstract.repository';
-import { RunStatus, WorkflowRun } from '../database/entities/workflow-run.entity';
-
-export interface CreateRunInput {
-  accountId: string;
-  workflowId: string;
-  workflowVersionId: string;
-  profileId: string;
-  triggerEventId: string;
-  status: RunStatus;
-  currentNodeId: string | null;
-  context: Record<string, unknown>;
-  finishedAt: Date | null;
-}
+import { AbstractRepository } from '../database/abstract.repository';
+import { WorkflowRun } from '../database/entities/workflow-run.entity';
+import { RunStatus } from '../enums/run-status.enum';
+import { CreateRunInput } from '../types/create-run-input.types';
+import { Transaction } from '../types/transaction.types';
 
 @Injectable()
 export class RunRepository extends AbstractRepository<WorkflowRun> {

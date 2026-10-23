@@ -1,13 +1,11 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';
+import { EmailSendJob, ProcessEventJob, StepJob } from '../types/job.types';
 import {
-  EmailSendJob,
   JOB_EXECUTE_STEP,
   JOB_PROCESS_EVENT,
   JOB_SEND_EMAIL,
-  ProcessEventJob,
-  StepJob,
   emailSendJobId,
   processEventJobId,
   stepJobId,

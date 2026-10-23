@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { ComparisonOp, Condition } from './definition';
-import { RunContext } from './run-context';
+import { ComparisonOp } from '../enums/comparison-op.enum';
+import { RunContext } from '../types/run-context.types';
+import { Condition } from '../types/workflow-definition.types';
 
 /** Pure evaluation of a Condition against a RunContext. Missing paths resolve to undefined. */
 @Injectable()

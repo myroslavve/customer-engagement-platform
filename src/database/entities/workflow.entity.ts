@@ -1,11 +1,6 @@
 import { Column, Entity } from 'typeorm';
+import { WorkflowStatus } from '../../enums/workflow-status.enum';
 import { AbstractEntity } from './abstract.entity';
-
-export enum WorkflowStatus {
-  Draft = 'draft',
-  Active = 'active',
-  Paused = 'paused',
-}
 
 @Entity({ name: 'workflows' })
 export class Workflow extends AbstractEntity {

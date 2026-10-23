@@ -1,15 +1,12 @@
 import {
   DeepPartial,
-  EntityManager,
   FindManyOptions,
   FindOneOptions,
   FindOptionsWhere,
   Repository,
 } from 'typeorm';
+import { Transaction } from '../types/transaction.types';
 import { AbstractEntity } from './entities/abstract.entity';
-
-/** An open database transaction; pass it to repository methods to run them inside it. */
-export type Transaction = EntityManager;
 
 /**
  * Base for domain repositories. Read/write methods accept the usual TypeORM find options plus an

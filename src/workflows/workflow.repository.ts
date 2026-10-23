@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AbstractRepository, Transaction } from '../database/abstract.repository';
+import { AbstractRepository } from '../database/abstract.repository';
 import { WorkflowVersion } from '../database/entities/workflow-version.entity';
-import { Workflow, WorkflowStatus } from '../database/entities/workflow.entity';
+import { Workflow } from '../database/entities/workflow.entity';
+import { WorkflowStatus } from '../enums/workflow-status.enum';
+import { Transaction } from '../types/transaction.types';
 
 /** Reads workflow versions, the unit the engine executes. */
 @Injectable()
