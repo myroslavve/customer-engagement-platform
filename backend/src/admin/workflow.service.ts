@@ -1,11 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AdminDatabaseService } from './admin-database.service';
-import {
-  WorkflowDefinition,
-  WorkflowInput,
-  WorkflowNode,
-  WorkflowStatus
-} from './workflow.types';
+import { WorkflowDefinition, WorkflowInput, WorkflowNode, WorkflowStatus } from './workflow.types';
 
 @Injectable()
 export class WorkflowService {
@@ -18,7 +13,7 @@ export class WorkflowService {
        FROM workflows w
        LEFT JOIN workflow_versions v ON v.id = w.published_version_id
        WHERE w.account_id = $1 ORDER BY w.updated_at DESC`,
-      [accountId]
+      [accountId],
     );
     return result.rows;
   }
@@ -29,20 +24,20 @@ export class WorkflowService {
       const workflow = (await client.query(
         `INSERT INTO workflows (account_id, name)
          VALUES ($1, $2) RETURNING id`,
-        [accountId, input.name]
+        [accountId, input.name],
       )) as Array<{ id: string }>;
       const version = (await client.query(
         `INSERT INTO workflow_versions
            (workflow_id, version, trigger_event_name, definition)
          VALUES ($1, 1, $2, $3)
          RETURNING id, version, trigger_event_name, definition, created_at`,
-        [workflow[0].id, input.definition.trigger.eventName, JSON.stringify(input.definition)]
+        [workflow[0].id, input.definition.trigger.eventName, JSON.stringify(input.definition)],
       )) as Array<Record<string, unknown>>;
       return {
         id: workflow[0].id,
         name: input.name,
         status: WorkflowStatus.Draft,
-        version: version[0]
+        version: version[0],
       };
     });
   }
@@ -60,12 +55,17 @@ export class WorkflowService {
   }
 
   validate(definition: WorkflowDefinition): true {
-    if (!definition?.trigger?.eventName || !definition.entryNodeId || !Array.isArray(definition.nodes)) {
+    if (
+      !definition?.trigger?.eventName ||
+      !definition.entryNodeId ||
+      !Array.isArray(definition.nodes)
+    ) {
       throw new BadRequestException('Workflow requires trigger, entryNodeId, and nodes');
     }
     const nodes = new Map<string, WorkflowNode>();
     for (const node of definition.nodes) {
-      if (!node.id || nodes.has(node.id)) throw new BadRequestException('Workflow node IDs must be unique');
+      if (!node.id || nodes.has(node.id))
+        throw new BadRequestException('Workflow node IDs must be unique');
       nodes.set(node.id, node);
     }
     if (!nodes.has(definition.entryNodeId)) {
@@ -102,7 +102,7 @@ export class WorkflowService {
     accountId: string,
     id: string,
     status: WorkflowStatus,
-    publishVersion: boolean
+    publishVersion: boolean,
   ) {
     const result = await this.database.query(
       `UPDATE workflows w
@@ -113,7 +113,7 @@ export class WorkflowService {
            updated_at = NOW()
        WHERE w.id = $1 AND w.account_id = $2
        RETURNING id, name, status, published_version_id, updated_at`,
-      [id, accountId, status, publishVersion]
+      [id, accountId, status, publishVersion],
     );
     if (!result.rows[0]) throw new NotFoundException('Workflow not found');
     return result.rows[0];

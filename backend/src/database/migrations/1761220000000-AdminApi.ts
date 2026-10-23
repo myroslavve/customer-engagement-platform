@@ -15,7 +15,9 @@ export class AdminApi1761220000000 implements MigrationInterface {
         "updated_at" timestamptz NOT NULL DEFAULT now(),
         CONSTRAINT "uq_admin_users_account_email" UNIQUE ("account_id", "email")
       )`);
-    await queryRunner.query(`CREATE UNIQUE INDEX "uq_admin_users_email_lower" ON "admin_users" (LOWER("email"))`);
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "uq_admin_users_email_lower" ON "admin_users" (LOWER("email"))`,
+    );
     await queryRunner.query(`
       CREATE TABLE "api_keys" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

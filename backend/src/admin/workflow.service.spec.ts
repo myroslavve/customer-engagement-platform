@@ -10,8 +10,8 @@ describe('WorkflowService', () => {
       service.validate({
         trigger: { eventName: 'signed_up' },
         entryNodeId: 'send',
-        nodes: [{ id: 'send', type: 'send_email', templateId: 'welcome', next: null }]
-      })
+        nodes: [{ id: 'send', type: 'send_email', templateId: 'welcome', next: null }],
+      }),
     ).toBe(true);
   });
 
@@ -22,16 +22,16 @@ describe('WorkflowService', () => {
         entryNodeId: 'a',
         nodes: [
           { id: 'a', type: 'branch', next: 'b', elseNext: null },
-          { id: 'b', type: 'delay', next: 'a' }
-        ]
-      })
+          { id: 'b', type: 'delay', next: 'a' },
+        ],
+      }),
     ).toThrow(BadRequestException);
     expect(() =>
       service.validate({
         trigger: { eventName: 'signed_up' },
         entryNodeId: 'a',
-        nodes: [{ id: 'a', type: 'delay', next: 'missing' }]
-      })
+        nodes: [{ id: 'a', type: 'delay', next: 'missing' }],
+      }),
     ).toThrow(BadRequestException);
   });
 });

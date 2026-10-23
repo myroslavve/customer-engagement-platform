@@ -11,7 +11,7 @@ export class TemplateService {
     const result = await this.database.query(
       `SELECT id, name, subject, body, created_at, updated_at
        FROM templates WHERE account_id = $1 ORDER BY updated_at DESC`,
-      [accountId]
+      [accountId],
     );
     return result.rows;
   }
@@ -21,7 +21,7 @@ export class TemplateService {
       `INSERT INTO templates (account_id, name, subject, body)
        VALUES ($1, $2, $3, $4)
        RETURNING id, name, subject, body, created_at, updated_at`,
-      [accountId, input.name, input.subject, input.body]
+      [accountId, input.name, input.subject, input.body],
     );
     return result.rows[0];
   }
@@ -32,7 +32,7 @@ export class TemplateService {
        SET name = $3, subject = $4, body = $5, updated_at = NOW()
        WHERE id = $1 AND account_id = $2
        RETURNING id, name, subject, body, created_at, updated_at`,
-      [id, accountId, input.name, input.subject, input.body]
+      [id, accountId, input.name, input.subject, input.body],
     );
     if (!result.rows[0]) throw new NotFoundException('Template not found');
     return result.rows[0];
@@ -41,7 +41,7 @@ export class TemplateService {
   async delete(accountId: string, id: string): Promise<void> {
     const result = await this.database.query(
       'DELETE FROM templates WHERE id = $1 AND account_id = $2 RETURNING id',
-      [id, accountId]
+      [id, accountId],
     );
     if (!result.rows[0]) throw new NotFoundException('Template not found');
   }

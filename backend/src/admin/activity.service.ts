@@ -28,7 +28,7 @@ export class ActivityService {
        FROM events e JOIN profiles p ON p.id = e.profile_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY e.occurred_at DESC LIMIT $${values.length}`,
-      values
+      values,
     );
     return result.rows;
   }
@@ -40,7 +40,7 @@ export class ActivityService {
        JOIN profiles p ON p.id = e.profile_id
        WHERE e.account_id = $1 AND p.external_id = $2
        ORDER BY e.occurred_at DESC`,
-      [accountId, userId]
+      [accountId, userId],
     );
     return result.rows;
   }
@@ -49,7 +49,7 @@ export class ActivityService {
     conditions: string[],
     values: unknown[],
     expression: string,
-    value: unknown
+    value: unknown,
   ): void {
     if (value === undefined || value === '') return;
     values.push(value);

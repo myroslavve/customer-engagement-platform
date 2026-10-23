@@ -29,8 +29,7 @@ export class AdminAuthService {
     const user = result.rows[0];
     const passwordMatches = await compare(
       input.password,
-      user?.password_hash ??
-        '$2b$12$ijldV01X2TgdaCJG210K0ucLkKYEiYe5b8jG/ihCG44dw52b8TvFy',
+      user?.password_hash ?? '$2b$12$ijldV01X2TgdaCJG210K0ucLkKYEiYe5b8jG/ihCG44dw52b8TvFy',
     );
     if (!user || !passwordMatches || user.role !== 'admin') {
       throw new UnauthorizedException('Invalid credentials');

@@ -22,20 +22,30 @@ function matches(rule: AudienceRule, profile: Record<string, unknown>): boolean 
   if ('not' in rule) return !matches(rule.not, profile);
   const actual = valueAt(profile, rule.field);
   switch (rule.op) {
-    case 'eq': return actual === rule.value;
-    case 'neq': return actual !== rule.value;
-    case 'exists': return actual !== undefined && actual !== null;
-    case 'in': return Array.isArray(rule.value) && rule.value.includes(actual);
-    case 'nin': return Array.isArray(rule.value) && !rule.value.includes(actual);
+    case 'eq':
+      return actual === rule.value;
+    case 'neq':
+      return actual !== rule.value;
+    case 'exists':
+      return actual !== undefined && actual !== null;
+    case 'in':
+      return Array.isArray(rule.value) && rule.value.includes(actual);
+    case 'nin':
+      return Array.isArray(rule.value) && !rule.value.includes(actual);
     case 'contains':
       return typeof actual === 'string' && typeof rule.value === 'string'
         ? actual.includes(rule.value)
         : Array.isArray(actual) && actual.includes(rule.value);
-    case 'gt': return typeof actual === 'number' && typeof rule.value === 'number' && actual > rule.value;
-    case 'gte': return typeof actual === 'number' && typeof rule.value === 'number' && actual >= rule.value;
-    case 'lt': return typeof actual === 'number' && typeof rule.value === 'number' && actual < rule.value;
-    case 'lte': return typeof actual === 'number' && typeof rule.value === 'number' && actual <= rule.value;
-    default: throw new BadRequestException(`Unsupported audience operator: ${rule.op}`);
+    case 'gt':
+      return typeof actual === 'number' && typeof rule.value === 'number' && actual > rule.value;
+    case 'gte':
+      return typeof actual === 'number' && typeof rule.value === 'number' && actual >= rule.value;
+    case 'lt':
+      return typeof actual === 'number' && typeof rule.value === 'number' && actual < rule.value;
+    case 'lte':
+      return typeof actual === 'number' && typeof rule.value === 'number' && actual <= rule.value;
+    default:
+      throw new BadRequestException(`Unsupported audience operator: ${rule.op}`);
   }
 }
 
@@ -47,7 +57,7 @@ export class AudienceService {
     const result = await this.database.query(
       `SELECT id, name, rule, created_at, updated_at
        FROM audiences WHERE account_id = $1 ORDER BY updated_at DESC`,
-      [accountId]
+      [accountId],
     );
     return result.rows;
   }
@@ -58,7 +68,7 @@ export class AudienceService {
       `INSERT INTO audiences (account_id, name, rule)
        VALUES ($1, $2, $3)
        RETURNING id, name, rule, created_at, updated_at`,
-      [accountId, input.name, JSON.stringify(input.rule)]
+      [accountId, input.name, JSON.stringify(input.rule)],
     );
     return result.rows[0];
   }
@@ -70,17 +80,14 @@ export class AudienceService {
       external_id: string;
       email: string | null;
       traits: Record<string, unknown>;
-    }>(
-      'SELECT id, external_id, email, traits FROM profiles WHERE account_id = $1',
-      [accountId]
-    );
+    }>('SELECT id, external_id, email, traits FROM profiles WHERE account_id = $1', [accountId]);
     const count = result.rows.filter((profile) =>
       matches(rule, {
         id: profile.id,
         externalId: profile.external_id,
         email: profile.email,
-        traits: profile.traits
-      })
+        traits: profile.traits,
+      }),
     ).length;
     return { count };
   }

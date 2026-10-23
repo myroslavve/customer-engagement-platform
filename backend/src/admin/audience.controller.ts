@@ -33,7 +33,7 @@ export class AudienceController {
   create(@Req() request: AdminRequest, @Body() input: AudienceDto) {
     return this.audienceService.create(requireAccountId(request), {
       name: input.name,
-      rule: input.rule
+      rule: input.rule,
     });
   }
 
