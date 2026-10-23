@@ -14,6 +14,12 @@ Run from `backend/` unless noted (commands work in bash and PowerShell).
    docker compose up -d
    ```
 
+   The PostgreSQL data lives in the `pgdata` volume and the schema is owned by the TypeORM
+   migrations. The earlier `cep-postgres` volume (raw SQL schema) is not reused or migrated: the
+   migrations cannot run on top of it. If you need its local data, back it up first
+   (`docker run --rm -v customer-engagement-platform_cep-postgres:/data -v "$PWD":/backup alpine tar czf /backup/cep-postgres.tgz -C /data .`),
+   then remove it with `docker volume rm customer-engagement-platform_cep-postgres`.
+
 2. Install dependencies and create the schema:
 
    ```bash
