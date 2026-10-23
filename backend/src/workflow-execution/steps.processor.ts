@@ -31,12 +31,14 @@ export class StepsProcessor extends WorkerHost implements OnApplicationBootstrap
 
   /**
    * Transient errors are retried by BullMQ and, once exhausted, leave the run where it is (the job
-   * stays in the failed set and can be retried). Only UnrecoverableError fails the run.
+   * stays in the failed set and can be retried). Only UnrecoverableError fails the run; if failing
+   * it errors, that error is thrown instead so BullMQ retries and the retry fails the run again.
    */
   async process(job: Job<StepJob, void, string>): Promise<void> {
     try {
       await this.workflowRunner.run(job.data);
     } catch (error) {
+      if (error instanceof UnrecoverableError) await this.failRun(job, error);
       const final = isFinalAttempt(job, error);
       const details = {
         message: final ? 'execute-step failed' : 'execute-step attempt failed, will retry',
@@ -50,8 +52,31 @@ export class StepsProcessor extends WorkerHost implements OnApplicationBootstrap
       };
       if (final) this.logger.error(details, error instanceof Error ? error.stack : undefined);
       else this.logger.warn(details);
-      if (error instanceof UnrecoverableError) await this.workflowRunner.fail(job.data, error);
       throw error;
+    }
+  }
+
+  private async failRun(job: Job<StepJob, void, string>, error: UnrecoverableError): Promise<void> {
+    try {
+      await this.workflowRunner.fail(job.data, error);
+    } catch (failError) {
+      const final = isFinalAttempt(job, failError);
+      this.logger.error(
+        {
+          message: final
+            ? 'Failing the run failed, run left at its node'
+            : 'Failing the run failed, will retry',
+          jobId: job.id,
+          runId: job.data.runId,
+          nodeId: job.data.nodeId,
+          attempt: job.attemptsStarted,
+          maxAttempts: job.opts.attempts ?? 1,
+          unrecoverableError: error.message,
+          error: failError instanceof Error ? failError.message : String(failError),
+        },
+        failError instanceof Error ? failError.stack : undefined,
+      );
+      throw failError;
     }
   }
 }

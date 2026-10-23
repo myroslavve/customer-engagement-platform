@@ -78,34 +78,55 @@ export class WorkflowRunner {
     }
 
     const output = this.toOutput(result);
-    const step = await this.runRepository.transaction(async (transaction) => {
-      const created = await this.runStepRepository.create(
-        {
-          runId: run.id,
-          jobId,
-          nodeId: node.id,
-          nodeType: node.type,
-          cause: job.cause,
-          status: RunStepStatus.Completed,
-          output,
-          error: null,
-        },
-        transaction,
-      );
-      this.applyOutput(run, job, output);
-      await this.runRepository.save(run, transaction);
-      return created;
-    });
-    await this.enqueueFollowUp(step);
+    let step: RunStep;
+    try {
+      step = await this.runRepository.transaction(async (transaction) => {
+        const created = await this.runStepRepository.create(
+          {
+            runId: run.id,
+            jobId,
+            nodeId: node.id,
+            nodeType: node.type,
+            cause: job.cause,
+            status: RunStepStatus.Completed,
+            output,
+            error: null,
+          },
+          transaction,
+        );
+        this.applyOutput(run, job, output);
+        await this.runRepository.save(run, transaction);
+        return created;
+      });
+    } catch (error) {
+      // A duplicate of this job (e.g. a stalled one) committed the step first; its row wins and
+      // this job only makes sure the follow-up exists.
+      if (!this.runStepRepository.isJobIdConflict(error)) throw error;
+      const committed = await this.runStepRepository.findByJobId(jobId);
+      if (!committed) throw error;
+      this.logger.debug({ message: 'Step already recorded by a duplicate job', jobId });
+      step = committed;
+    }
+    if (step.status === RunStepStatus.Completed) await this.enqueueFollowUp(step);
   }
 
-  /** Records a failed step and fails the run; called for UnrecoverableError only. */
+  /**
+   * Fails the run and records the failed step; called for UnrecoverableError only. A job whose run
+   * already moved on (a duplicate whose twin advanced or failed it) records nothing.
+   */
   async fail(job: StepJob, error: Error): Promise<void> {
     const run = await this.runRepository.findById(job.runId);
     if (!run) return;
     const version = await this.workflowRepository.findById(run.workflowVersionId);
     const nodeType = version ? (findNode(version.definition, job.nodeId)?.type ?? null) : null;
-    await this.runRepository.transaction(async (transaction) => {
+    const failed = await this.runRepository.transaction(async (transaction) => {
+      const marked = await this.runRepository.markFailed(
+        run.id,
+        job.nodeId,
+        error.message,
+        transaction,
+      );
+      if (!marked) return false;
       await this.runStepRepository.createIfAbsent(
         {
           runId: run.id,
@@ -119,14 +140,19 @@ export class WorkflowRunner {
         },
         transaction,
       );
-      await this.runRepository.markFailed(run.id, job.nodeId, error.message, transaction);
+      return true;
     });
-    this.logger.error({
-      message: 'Run failed',
-      runId: run.id,
-      nodeId: job.nodeId,
-      error: error.message,
-    });
+    // The processor already logged the error with its stack; this records the outcome.
+    if (failed) {
+      this.logger.log({ message: 'Run marked failed', runId: run.id, nodeId: job.nodeId });
+    } else {
+      this.logger.warn({
+        message: 'Run already moved on, failure not recorded',
+        runId: run.id,
+        nodeId: job.nodeId,
+        status: run.status,
+      });
+    }
   }
 
   /**
@@ -200,6 +226,8 @@ export class WorkflowRunner {
       run.status = RunStatus.Completed;
       run.currentNodeId = null;
       run.finishedAt = new Date();
+      // A trailing delay (next: null) has nothing left to wait for.
+      run.waitUntil = null;
     } else {
       run.currentNodeId = result.nextNodeId;
     }

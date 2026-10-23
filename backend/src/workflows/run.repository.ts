@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { AbstractRepository } from '../database/abstract.repository';
 import { WorkflowRun } from '../database/entities/workflow-run.entity';
 import { RunStatus } from '../enums/run-status.enum';
@@ -29,8 +28,7 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
       .createQueryBuilder()
       .insert()
       .into(WorkflowRun)
-      // QueryDeepPartialEntity cannot map Record<string, unknown> jsonb columns; the shape is exact.
-      .values(input as QueryDeepPartialEntity<WorkflowRun>)
+      .values(input)
       .orIgnore()
       .returning('id')
       .execute();

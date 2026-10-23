@@ -125,8 +125,10 @@ WaitingRunService --> QueueProducer : enqueue next step
 ' ---- workflow execution ----
 Redis --> StepsProcessor : step jobs (incl. delayed)
 StepsProcessor --> WorkflowRunner
-WorkflowRunner --> RunRepository : load / claim / save run
+WorkflowRunner --> RunRepository : load / claim / save / mark failed
 WorkflowRunner --> WorkflowRepository : load version graph
+WorkflowRunner --> ProfileRepository : profile for run context
+WorkflowRunner --> EventRepository : event for run context
 WorkflowRunner --> RunStepRepository : record step
 WorkflowRunner --> StepExecutorRegistry : executor for node type
 WorkflowRunner --> QueueProducer : next step / delayed step / wait timeout

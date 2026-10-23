@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { AbstractRepository } from '../database/abstract.repository';
 import { RunStep } from '../database/entities/run-step.entity';
@@ -27,6 +27,13 @@ export class RunStepRepository extends AbstractRepository<RunStep> {
       .values(input as QueryDeepPartialEntity<RunStep>)
       .orIgnore()
       .execute();
+  }
+
+  /** True when error is the uq_run_steps_job_id violation: another job recorded this step first. */
+  isJobIdConflict(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) return false;
+    const driverError = error.driverError as { code?: string; constraint?: string };
+    return driverError.code === '23505' && driverError.constraint === 'uq_run_steps_job_id';
   }
 
   findByJobId(jobId: string, transaction?: Transaction): Promise<RunStep | null> {
