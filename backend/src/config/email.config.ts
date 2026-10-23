@@ -2,8 +2,11 @@ import { z } from 'zod';
 
 export const EmailConfigSchema = z.object({
   resendApiKey: z.string().min(1),
-  /** "hello@acme.com" or "Acme <hello@acme.com>"; Resend's sandbox sender needs no verified domain. */
-  fromAddress: z.string().min(1).default('onboarding@resend.dev'),
+  /**
+   * "hello@acme.com" or "Acme <hello@acme.com>" on a verified domain. No default: Resend's sandbox
+   * sender (onboarding@resend.dev) only reaches the account owner, so it is for local use only.
+   */
+  fromAddress: z.string().min(1),
   concurrency: z.coerce.number().int().positive().default(2),
 });
 
