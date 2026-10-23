@@ -32,10 +32,13 @@ export class WaitingRunService {
       event.id,
     );
     const ctx = buildRunContext(profile, event);
+    const versions = await this.workflowRepository.getVersions(
+      candidates.map((run) => run.workflowVersionId),
+    );
 
     for (const run of candidates) {
       if (!run.currentNodeId) continue;
-      const version = await this.workflowRepository.getVersion(run.workflowVersionId);
+      const version = versions.get(run.workflowVersionId)!;
       const node = findNode(version.definition, run.currentNodeId);
       if (!node || node.type !== NodeType.WaitForEvent || node.eventName !== event.name) continue;
       if (node.filter && !this.conditionEvaluator.evaluate(node.filter, ctx)) continue;

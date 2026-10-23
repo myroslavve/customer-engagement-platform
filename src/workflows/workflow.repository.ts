@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { AbstractRepository } from '../database/abstract.repository';
 import { WorkflowVersion } from '../database/entities/workflow-version.entity';
 import { Workflow } from '../database/entities/workflow.entity';
@@ -33,5 +33,19 @@ export class WorkflowRepository extends AbstractRepository<WorkflowVersion> {
 
   getVersion(versionId: string, transaction?: Transaction): Promise<WorkflowVersion> {
     return this.findByIdOrFail(versionId, transaction);
+  }
+
+  /** Loads several versions in one query, keyed by id; throws if any of them is missing. */
+  async getVersions(
+    versionIds: string[],
+    transaction?: Transaction,
+  ): Promise<Map<string, WorkflowVersion>> {
+    const uniqueIds = [...new Set(versionIds)];
+    if (uniqueIds.length === 0) return new Map();
+    const versions = await this.find({ where: { id: In(uniqueIds) } }, transaction);
+    const byId = new Map(versions.map((version) => [version.id, version]));
+    const missing = uniqueIds.filter((id) => !byId.has(id));
+    if (missing.length > 0) throw new Error(`Workflow versions not found: ${missing.join(', ')}`);
+    return byId;
   }
 }

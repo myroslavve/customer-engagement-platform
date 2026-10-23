@@ -71,6 +71,7 @@ package "shared" {
   class WorkflowRepository {
     +findActiveByTrigger(accountId: string, eventName: string): Promise<WorkflowVersion[]>
     +getVersion(versionId: string): Promise<WorkflowVersion>
+    +getVersions(versionIds: string[]): Promise<Map<string, WorkflowVersion>>
   }
   class RunRepository {
     +createIfAbsent(run: object): Promise<WorkflowRun | null>
