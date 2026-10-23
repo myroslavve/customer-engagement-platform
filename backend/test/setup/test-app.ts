@@ -34,7 +34,8 @@ export async function createTestApp(): Promise<TestApp> {
     .overrideProvider(EMAIL_PROVIDER)
     .useValue(fakeEmailProvider)
     .compile();
-  const app = moduleRef.createNestApplication({ logger: ['error', 'warn'] });
+  // Many cases fail jobs on purpose; their logs would bury real failures (assertions carry the state).
+  const app = moduleRef.createNestApplication({ logger: false });
   await app.init();
   const worker = (queueName: string) => app.get(PROCESSORS[queueName]).worker;
   return {
