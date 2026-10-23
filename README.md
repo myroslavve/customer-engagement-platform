@@ -23,6 +23,7 @@ not clash with other local projects).
 - `npm run migration:run` / `migration:revert` / `migration:generate -- src/database/migrations/<Name>`
 - `npm run lint`, `npm run format` / `format:check`, `npm run typecheck`, `npm test`
 - `npm run start:prod` / `migration:run:prod` — run from the compiled `dist/` (Docker image)
+
 ## CI/CD
 
 - `.github/workflows/ci.yml` (PRs and `main`): format check, lint, typecheck, build, tests.
