@@ -3,15 +3,22 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DefaultJobOptions } from 'bullmq';
 import { AppConfig } from '../config/configuration';
+import { QueueConfig } from '../config/queue.config';
 import { QueueProducer } from './queue-producer';
-import { QUEUE_EMAIL_SEND, QUEUE_EVENTS, QUEUE_WORKFLOW_STEPS } from './queue-names';
+import { QUEUE_NAMES } from './queue-names';
 
-export const DEFAULT_JOB_OPTIONS: DefaultJobOptions = {
-  attempts: 5,
-  backoff: { type: 'exponential', delay: 1000 },
+const JOB_RETENTION: DefaultJobOptions = {
   removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
   removeOnFail: { age: 7 * 24 * 60 * 60 },
 };
+
+function buildDefaultJobOptions(config: QueueConfig): DefaultJobOptions {
+  return {
+    attempts: config.jobAttempts,
+    backoff: { type: 'exponential', delay: config.backoffDelayMs },
+    ...JOB_RETENTION,
+  };
+}
 
 @Module({
   imports: [
@@ -21,10 +28,14 @@ export const DEFAULT_JOB_OPTIONS: DefaultJobOptions = {
         connection: configService.get('redis', { infer: true }),
       }),
     }),
-    BullModule.registerQueue(
-      { name: QUEUE_EVENTS, defaultJobOptions: DEFAULT_JOB_OPTIONS },
-      { name: QUEUE_WORKFLOW_STEPS, defaultJobOptions: DEFAULT_JOB_OPTIONS },
-      { name: QUEUE_EMAIL_SEND, defaultJobOptions: DEFAULT_JOB_OPTIONS },
+    BullModule.registerQueueAsync(
+      ...QUEUE_NAMES.map((name) => ({
+        name,
+        inject: [ConfigService],
+        useFactory: (configService: ConfigService<AppConfig, true>) => ({
+          defaultJobOptions: buildDefaultJobOptions(configService.get('queue', { infer: true })),
+        }),
+      })),
     ),
   ],
   providers: [QueueProducer],

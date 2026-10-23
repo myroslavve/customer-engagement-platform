@@ -16,6 +16,35 @@ jobs:
   backend:
     name: 'Backend: lint, typecheck, build, test'
     runs-on: ubuntu-latest
+    # For npm run test:integration; .env.test fills in the rest (cep_test database, Redis db 1).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cep
+          POSTGRES_PASSWORD: cep
+          POSTGRES_DB: cep
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cep -d cep"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
     defaults:
       run:
         working-directory: backend
@@ -32,3 +61,4 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
+      - run: npm run test:integration

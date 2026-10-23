@@ -36,7 +36,7 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
   }
 
   /**
-   * Logs and rethrows every failure; retries and backoff come from the queue's DEFAULT_JOB_OPTIONS.
+   * Logs and rethrows every failure; retries and backoff come from the queue's default job options.
    * Missing rows throw too: producers enqueue after commit, so that is rare and worth retrying.
    * Attempts that will be retried log at warn; only the last one (or an unrecoverable error) logs at
    * error, so alerts fire on exhaustion rather than on every transient failure.

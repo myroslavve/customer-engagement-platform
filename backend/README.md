@@ -100,7 +100,9 @@ an older version after enabling token-version revocation.
 
 The `events` worker starts runs and resumes waiting ones; the `workflow-steps` worker executes a run one
 node per job and records each executed node in `run_steps`. `EVENTS_QUEUE_CONCURRENCY` and
-`STEPS_QUEUE_CONCURRENCY` (default 10 each) set the worker concurrency. A step job that exhausts its
+`STEPS_QUEUE_CONCURRENCY` (default 10 each) set the worker concurrency. Every job gets
+`QUEUE_JOB_ATTEMPTS` attempts (default 5) with exponential backoff from `QUEUE_BACKOFF_DELAY_MS`
+(default 1000). A step job that exhausts its
 retries on a transient error stays in the BullMQ failed set and leaves the run where it was, so
 retrying the job resumes the run; only definition errors (missing node, no executor) fail the run.
 
@@ -127,7 +129,12 @@ template is not one of the account's templates fails its run.
 
 - `npm run start` / `npm run start:dev` — run the application (HTTP API + queue processors)
 - `npm run migration:run` / `migration:revert` / `migration:generate -- src/database/migrations/<Name>`
-- `npm run lint`, `npm run format` / `format:check`, `npm run typecheck`, `npm test`
+- `npm run lint`, `npm run format` / `format:check`, `npm run typecheck`, `npm test` (unit tests,
+  no infrastructure)
+- `npm run test:integration` — integration tests (`test/`) on the docker-compose PostgreSQL and
+  Redis: the real application with only the email provider faked. They use the `cep_test` database
+  (created and migrated automatically) and Redis db 1, configured in `.env.test`; shell variables
+  override it (CI sets hosts and ports). The tests shorten `QUEUE_BACKOFF_DELAY_MS` to 20 ms.
 - `npm run start:prod` / `migration:run:prod` — run from the compiled `dist/` (Docker image)
 
 The Docker image (`Dockerfile`, build context `backend/`) runs `node dist/main.js`; run
