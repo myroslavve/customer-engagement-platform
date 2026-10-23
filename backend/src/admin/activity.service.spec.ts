@@ -57,7 +57,7 @@ describe('ActivityService', () => {
         .fn()
         .mockResolvedValueOnce({ rows: [eventRow] })
         .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ present: false }] }),
+        .mockResolvedValueOnce({ rows: [] }),
     };
     const service = new ActivityService(database as never);
 
@@ -115,22 +115,13 @@ describe('ActivityService', () => {
     expect(statements.some((sql) => sql.includes('FROM workflow_runs'))).toBe(true);
   });
 
-  it('returns message activity only when the messages table exists', async () => {
-    const absent = { query: vi.fn().mockResolvedValue({ rows: [{ present: false }] }) };
-    await expect(
-      new ActivityService(absent as never).list('account-1', { type: 'message' }),
-    ).resolves.toEqual([]);
-    expect(absent.query).toHaveBeenCalledTimes(1);
+  it('reports message status, attempts and failure detail', async () => {
+    const database = { query: vi.fn().mockResolvedValueOnce({ rows: [messageRow] }) };
+    const service = new ActivityService(database as never);
 
-    const present = {
-      query: vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [{ present: true }] })
-        .mockResolvedValueOnce({ rows: [messageRow] }),
-    };
-    const items = await new ActivityService(present as never).list('account-1', {
-      type: 'message',
-    });
+    const items = await service.list('account-1', { type: 'message', status: 'sent' });
+
+    expect(database.query.mock.calls[0][0]).toContain('m.status = $2');
     expect(items).toEqual([
       expect.objectContaining({
         type: 'message',
@@ -138,26 +129,10 @@ describe('ActivityService', () => {
         status: 'sent',
         email: 'one@example.com',
         error: null,
+        attempts: 1,
         timestamp: '2026-01-01T00:00:00.000Z',
       }),
     ]);
-  });
-
-  it('retries the message table check after a transient failure', async () => {
-    const database = {
-      query: vi
-        .fn()
-        .mockRejectedValueOnce(new Error('db down'))
-        .mockResolvedValueOnce({ rows: [{ present: true }] })
-        .mockResolvedValueOnce({ rows: [] }),
-    };
-    const service = new ActivityService(database as never);
-
-    await expect(service.list('account-1', { type: 'message' })).resolves.toEqual([]);
-    await service.list('account-1', { type: 'message' });
-
-    // A failure is not cached: the second request probes the schema and then reads messages.
-    expect(database.query).toHaveBeenCalledTimes(3);
   });
 
   it('caps requested activity limits', async () => {
@@ -186,7 +161,6 @@ describe('ActivityService', () => {
         .fn()
         .mockResolvedValueOnce({ rows: [eventRow] })
         .mockResolvedValueOnce({ rows: [runRow] })
-        .mockResolvedValueOnce({ rows: [{ present: true }] })
         .mockResolvedValueOnce({ rows: [messageRow] }),
     };
     const service = new ActivityService(database as never);

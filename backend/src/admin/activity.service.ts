@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { AdminDatabaseService } from './admin-database.service';
 
 export type ActivityItemType = 'event' | 'run' | 'message';
@@ -81,10 +81,6 @@ const MESSAGE_COLUMNS = `m.id, m.run_id, m.node_id, m.profile_id, p.external_id,
 
 @Injectable()
 export class ActivityService {
-  private readonly logger = new Logger(ActivityService.name);
-  /** Cached so a transient failure is not mistaken for "no messages table" forever. */
-  private messagesTable?: boolean;
-
   constructor(private readonly database: AdminDatabaseService) {}
 
   /** Events, workflow runs and messages, newest first, trimmed to the requested limit. */
@@ -215,20 +211,12 @@ export class ActivityService {
     }));
   }
 
-  /**
-   * Message outcomes. The messages table arrives with the messaging migration, which is not merged
-   * yet; until then message activity is empty rather than an error, and picks up automatically once
-   * the migration runs.
-   */
+  /** Message outcomes: what the messaging worker recorded as sent, failed or skipped. */
   private async messageActivity(
     accountId: string,
     scope: ActivityScope,
     limit: number,
   ): Promise<ActivityItem[]> {
-    if (!(await this.hasMessagesTable())) {
-      this.logger.debug({ message: 'Message activity skipped: no messages table yet' });
-      return [];
-    }
     const values: unknown[] = [accountId];
     const conditions = ['m.account_id = $1'];
     if (scope.kind === 'user') {
@@ -265,19 +253,6 @@ export class ActivityService {
       sentAt: toIso(row.sent_at),
       createdAt: toIso(row.created_at),
     }));
-  }
-
-  private async hasMessagesTable(): Promise<boolean> {
-    if (this.messagesTable !== undefined) return this.messagesTable;
-    try {
-      const result = await this.database.query<{ present: boolean }>(
-        `SELECT to_regclass('public.messages') IS NOT NULL AS present`,
-      );
-      this.messagesTable = result.rows[0]?.present === true;
-    } catch {
-      return false;
-    }
-    return this.messagesTable;
   }
 }
 
