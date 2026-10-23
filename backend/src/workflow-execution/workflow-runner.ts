@@ -1,25 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { UnrecoverableError } from 'bullmq';
-import { RunStep } from '../database/entities/run-step.entity';
-import { WorkflowRun } from '../database/entities/workflow-run.entity';
-import { RunStatus } from '../enums/run-status.enum';
-import { RunStepStatus } from '../enums/run-step-status.enum';
-import { StepCause } from '../enums/step-cause.enum';
-import { StepResultKind } from '../enums/step-result-kind.enum';
 import { stepJobId } from '../queues/jobs';
-import { QueueProducer } from '../queues/queue-producer';
 import { StepJob } from '../types/job.types';
-import { RunContext } from '../types/run-context.types';
-import { RunStepOutput } from '../types/run-step-output.types';
-import { StepResult } from '../types/step-result.types';
-import { EventRepository } from '../workflows/event.repository';
-import { findNode } from '../workflows/find-node';
-import { ProfileRepository } from '../workflows/profile.repository';
-import { buildRunContext } from '../workflows/run-context';
 import { RunStepRepository } from '../workflows/run-step.repository';
 import { RunRepository } from '../workflows/run.repository';
-import { WorkflowRepository } from '../workflows/workflow.repository';
-import { StepExecutorRegistry } from './step-executor.registry';
+import { FollowUpScheduler } from './follow-up.scheduler';
+import { toStepOutput } from './run-transition';
+import { StepContextBuilder } from './step-context.builder';
+import { StepNodeResolver } from './step-node.resolver';
+import { StepOwnershipService } from './step-ownership.service';
+import { StepRecorder } from './step-recorder';
 
 /**
  * Executes one node visit per step job: "execute the node once, then make sure the follow-up job
@@ -34,220 +23,52 @@ export class WorkflowRunner {
   constructor(
     private readonly runRepository: RunRepository,
     private readonly runStepRepository: RunStepRepository,
-    private readonly workflowRepository: WorkflowRepository,
-    private readonly profileRepository: ProfileRepository,
-    private readonly eventRepository: EventRepository,
-    private readonly stepExecutorRegistry: StepExecutorRegistry,
-    private readonly queueProducer: QueueProducer,
+    private readonly stepOwnershipService: StepOwnershipService,
+    private readonly stepNodeResolver: StepNodeResolver,
+    private readonly stepContextBuilder: StepContextBuilder,
+    private readonly stepRecorder: StepRecorder,
+    private readonly followUpScheduler: FollowUpScheduler,
   ) {}
 
   async run(job: StepJob): Promise<void> {
     const jobId = stepJobId(job);
-    const existingStep = await this.runStepRepository.findByJobId(jobId);
-    if (existingStep) {
+    const recordedStep = await this.runStepRepository.findByJobId(jobId);
+    if (recordedStep) {
       // A retry after the follow-up enqueue failed: only the enqueue is repeated.
-      if (existingStep.status === RunStepStatus.Completed) await this.enqueueFollowUp(existingStep);
+      await this.followUpScheduler.schedule(recordedStep);
       return;
     }
 
-    const run = await this.loadOwnedRun(job, jobId);
+    const run = await this.stepOwnershipService.findOwnedRun(job, jobId);
     if (!run) return;
 
-    const version = await this.workflowRepository.getVersion(run.workflowVersionId);
-    const node = findNode(version.definition, job.nodeId);
-    if (!node) {
-      throw new UnrecoverableError(
-        `Node "${job.nodeId}" not found in workflow version ${version.id}`,
-      );
-    }
-    const executor = this.stepExecutorRegistry.get(node.type);
-    if (!executor) {
-      throw new UnrecoverableError(`No executor registered for node type "${node.type}"`);
-    }
+    const step = await this.stepNodeResolver.resolve(run, job.nodeId);
+    const runContext = await this.stepContextBuilder.build(run, job);
+    const result = await step.executor.execute(step.node, { run, cause: job.cause, runContext });
+    this.stepNodeResolver.assertNextNodeExists(step, result);
 
-    const runContext = await this.buildContext(run, job);
-    const result = await executor.execute(node, { run, cause: job.cause, runContext });
-    if (
-      result.kind === StepResultKind.Advance &&
-      result.nextNodeId !== null &&
-      !findNode(version.definition, result.nextNodeId)
-    ) {
-      throw new UnrecoverableError(
-        `Next node "${result.nextNodeId}" of node "${node.id}" not found in workflow version ${version.id}`,
-      );
-    }
-
-    const output = this.toOutput(result);
-    let step: RunStep;
-    try {
-      step = await this.runRepository.transaction(async (transaction) => {
-        const created = await this.runStepRepository.create(
-          {
-            runId: run.id,
-            jobId,
-            nodeId: node.id,
-            nodeType: node.type,
-            cause: job.cause,
-            status: RunStepStatus.Completed,
-            output,
-            error: null,
-          },
-          transaction,
-        );
-        this.applyOutput(run, job, output);
-        await this.runRepository.save(run, transaction);
-        return created;
-      });
-    } catch (error) {
-      // A duplicate of this job (e.g. a stalled one) committed the step first; its row wins and
-      // this job only makes sure the follow-up exists.
-      if (!this.runStepRepository.isJobIdConflict(error)) throw error;
-      const committed = await this.runStepRepository.findByJobId(jobId);
-      if (!committed) throw error;
-      this.logger.debug({ message: 'Step already recorded by a duplicate job', jobId });
-      step = committed;
-    }
-    if (step.status === RunStepStatus.Completed) await this.enqueueFollowUp(step);
+    const output = toStepOutput(result, new Date());
+    const completedStep = await this.stepRecorder.recordCompleted(run, job, step.node, output);
+    await this.followUpScheduler.schedule(completedStep);
   }
 
-  /**
-   * Fails the run and records the failed step; called for UnrecoverableError only. A job whose run
-   * already moved on (a duplicate whose twin advanced or failed it) records nothing.
-   */
+  /** Records a failed step and fails the run; called for UnrecoverableError only. */
   async fail(job: StepJob, error: Error): Promise<void> {
     const run = await this.runRepository.findById(job.runId);
     if (!run) return;
-    const version = await this.workflowRepository.findById(run.workflowVersionId);
-    const nodeType = version ? (findNode(version.definition, job.nodeId)?.type ?? null) : null;
-    const failed = await this.runRepository.transaction(async (transaction) => {
-      const marked = await this.runRepository.markFailed(
-        run.id,
-        job.nodeId,
-        error.message,
-        transaction,
-      );
-      if (!marked) return false;
-      await this.runStepRepository.createIfAbsent(
-        {
-          runId: run.id,
-          jobId: stepJobId(job),
-          nodeId: job.nodeId,
-          nodeType,
-          cause: job.cause,
-          status: RunStepStatus.Failed,
-          output: null,
-          error: error.message,
-        },
-        transaction,
-      );
-      return true;
-    });
+    const nodeType = await this.stepNodeResolver.findNodeType(run, job.nodeId);
+    const failed = await this.stepRecorder.recordFailed(run, job, nodeType, error);
+
     // The processor already logged the error with its stack; this records the outcome.
     if (failed) {
       this.logger.log({ message: 'Run marked failed', runId: run.id, nodeId: job.nodeId });
-    } else {
-      this.logger.warn({
-        message: 'Run already moved on, failure not recorded',
-        runId: run.id,
-        nodeId: job.nodeId,
-        status: run.status,
-      });
-    }
-  }
-
-  /**
-   * Returns the run when this job is the one allowed to execute the node, null when the job is
-   * stale (the run moved on) or lost the wait race. Timeout jobs win by claiming the run.
-   */
-  private async loadOwnedRun(job: StepJob, jobId: string): Promise<WorkflowRun | null> {
-    const run = await this.runRepository.findById(job.runId);
-    if (!run) throw new UnrecoverableError(`Run ${job.runId} not found`);
-
-    let owned = false;
-    switch (job.cause) {
-      case StepCause.Timeout:
-        owned = await this.runRepository.claim(run.id, job.nodeId, jobId);
-        break;
-      case StepCause.Event:
-        owned =
-          run.status === RunStatus.Running &&
-          run.currentNodeId === job.nodeId &&
-          run.claimKey === jobId;
-        break;
-      case StepCause.Enter:
-        owned = run.status === RunStatus.Running && run.currentNodeId === job.nodeId;
-        break;
-    }
-    if (!owned) {
-      this.logger.debug({
-        message: 'Step job skipped: it does not own the run',
-        jobId,
-        runId: run.id,
-        status: run.status,
-        currentNodeId: run.currentNodeId,
-      });
-      return null;
-    }
-    // claim() changed the row; reload so applyOutput works on current state.
-    return job.cause === StepCause.Timeout ? this.runRepository.findByIdOrFail(run.id) : run;
-  }
-
-  /** The event in context is the one that last touched the run; the trigger event otherwise. */
-  private async buildContext(run: WorkflowRun, job: StepJob): Promise<RunContext> {
-    const profile = await this.profileRepository.findByIdOrFail(run.profileId);
-    const eventId =
-      (job.cause === StepCause.Event && job.eventId) ||
-      run.context.lastEventId ||
-      run.triggerEventId;
-    const event = await this.eventRepository.findByIdOrFail(eventId);
-    return buildRunContext(profile, event);
-  }
-
-  private toOutput(result: StepResult): RunStepOutput {
-    const delayMs = result.kind === StepResultKind.Wait ? result.timeoutMs : result.delayMs;
-    const dueAt = delayMs !== undefined ? new Date(Date.now() + delayMs).toISOString() : null;
-    return { result, dueAt };
-  }
-
-  private applyOutput(run: WorkflowRun, job: StepJob, output: RunStepOutput): void {
-    const { result, dueAt } = output;
-    run.claimKey = null;
-    run.waitUntil = dueAt ? new Date(dueAt) : null;
-    if (result.kind === StepResultKind.Wait) {
-      run.status = RunStatus.Waiting;
-      run.waitingForEvent = result.eventName;
       return;
     }
-    run.waitingForEvent = null;
-    if (job.cause === StepCause.Event && job.eventId) {
-      run.context = { ...run.context, lastEventId: job.eventId };
-    }
-    if (result.nextNodeId === null) {
-      run.status = RunStatus.Completed;
-      run.currentNodeId = null;
-      run.finishedAt = new Date();
-      // A trailing delay (next: null) has nothing left to wait for.
-      run.waitUntil = null;
-    } else {
-      run.currentNodeId = result.nextNodeId;
-    }
-  }
-
-  /** Idempotent by job id; the delay is the time left until dueAt, so retries do not restart it. */
-  private async enqueueFollowUp(step: RunStep): Promise<void> {
-    const output = step.output;
-    if (!output) return;
-    const delayMs = output.dueAt ? Math.max(0, new Date(output.dueAt).getTime() - Date.now()) : 0;
-    if (output.result.kind === StepResultKind.Wait) {
-      await this.queueProducer.enqueueStep(
-        { runId: step.runId, nodeId: step.nodeId, cause: StepCause.Timeout },
-        delayMs,
-      );
-    } else if (output.result.nextNodeId !== null) {
-      await this.queueProducer.enqueueStep(
-        { runId: step.runId, nodeId: output.result.nextNodeId, cause: StepCause.Enter },
-        delayMs,
-      );
-    }
+    this.logger.warn({
+      message: 'Run already moved on, failure not recorded',
+      runId: run.id,
+      nodeId: job.nodeId,
+      status: run.status,
+    });
   }
 }

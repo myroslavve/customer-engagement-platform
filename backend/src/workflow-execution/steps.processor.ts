@@ -39,19 +39,7 @@ export class StepsProcessor extends WorkerHost implements OnApplicationBootstrap
       await this.workflowRunner.run(job.data);
     } catch (error) {
       if (error instanceof UnrecoverableError) await this.failRun(job, error);
-      const final = isFinalAttempt(job, error);
-      const details = {
-        message: final ? 'execute-step failed' : 'execute-step attempt failed, will retry',
-        jobId: job.id,
-        runId: job.data.runId,
-        nodeId: job.data.nodeId,
-        cause: job.data.cause,
-        attempt: job.attemptsStarted,
-        maxAttempts: job.opts.attempts ?? 1,
-        error: error instanceof Error ? error.message : String(error),
-      };
-      if (final) this.logger.error(details, error instanceof Error ? error.stack : undefined);
-      else this.logger.warn(details);
+      this.logAttemptFailed(job, error);
       throw error;
     }
   }
@@ -60,23 +48,41 @@ export class StepsProcessor extends WorkerHost implements OnApplicationBootstrap
     try {
       await this.workflowRunner.fail(job.data, error);
     } catch (failError) {
-      const final = isFinalAttempt(job, failError);
+      const message = isFinalAttempt(job, failError)
+        ? 'Failing the run failed, run left at its node'
+        : 'Failing the run failed, will retry';
       this.logger.error(
-        {
-          message: final
-            ? 'Failing the run failed, run left at its node'
-            : 'Failing the run failed, will retry',
-          jobId: job.id,
-          runId: job.data.runId,
-          nodeId: job.data.nodeId,
-          attempt: job.attemptsStarted,
-          maxAttempts: job.opts.attempts ?? 1,
-          unrecoverableError: error.message,
-          error: failError instanceof Error ? failError.message : String(failError),
-        },
+        { ...this.jobDetails(job, failError), message, unrecoverableError: error.message },
         failError instanceof Error ? failError.stack : undefined,
       );
       throw failError;
     }
+  }
+
+  /** Retried attempts log at warn; only the last one (or an unrecoverable error) at error. */
+  private logAttemptFailed(job: Job<StepJob, void, string>, error: unknown): void {
+    if (!isFinalAttempt(job, error)) {
+      this.logger.warn({
+        ...this.jobDetails(job, error),
+        message: 'execute-step attempt failed, will retry',
+      });
+      return;
+    }
+    this.logger.error(
+      { ...this.jobDetails(job, error), message: 'execute-step failed' },
+      error instanceof Error ? error.stack : undefined,
+    );
+  }
+
+  private jobDetails(job: Job<StepJob, void, string>, error: unknown) {
+    return {
+      jobId: job.id,
+      runId: job.data.runId,
+      nodeId: job.data.nodeId,
+      cause: job.data.cause,
+      attempt: job.attemptsStarted,
+      maxAttempts: job.opts.attempts ?? 1,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }

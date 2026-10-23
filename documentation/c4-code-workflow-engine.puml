@@ -26,6 +26,28 @@ package "workflow execution" {
     +run(job: StepJob): Promise<void>
     +fail(job: StepJob, error: Error): Promise<void>
   }
+  class StepOwnershipService {
+    +findOwnedRun(job: StepJob, jobId: string): Promise<WorkflowRun | null>
+  }
+  class StepNodeResolver {
+    +resolve(run: WorkflowRun, nodeId: string): Promise<ResolvedStep>
+    +assertNextNodeExists(step: ResolvedStep, result: StepResult): void
+    +findNodeType(run: WorkflowRun, nodeId: string): Promise<NodeType | null>
+  }
+  class StepContextBuilder {
+    +build(run: WorkflowRun, job: StepJob): Promise<RunContext>
+  }
+  class StepRecorder {
+    +recordCompleted(run, job, node, output: RunStepOutput): Promise<RunStep>
+    +recordFailed(run, job, nodeType, error: Error): Promise<boolean>
+  }
+  class FollowUpScheduler {
+    +schedule(step: RunStep): Promise<void>
+  }
+  class "run-transition" as RunTransition <<functions>> {
+    +toStepOutput(result: StepResult, now: Date): RunStepOutput
+    +applyStepOutput(run, job, output, now): void
+  }
   class StepExecutorRegistry {
     +register(executor: StepExecutor): void
     +get(nodeType: NodeType): StepExecutor
@@ -125,13 +147,22 @@ WaitingRunService --> QueueProducer : enqueue next step
 ' ---- workflow execution ----
 Redis --> StepsProcessor : step jobs (incl. delayed)
 StepsProcessor --> WorkflowRunner
-WorkflowRunner --> RunRepository : load / claim / save / mark failed
-WorkflowRunner --> WorkflowRepository : load version graph
-WorkflowRunner --> ProfileRepository : profile for run context
-WorkflowRunner --> EventRepository : event for run context
-WorkflowRunner --> RunStepRepository : record step
-WorkflowRunner --> StepExecutorRegistry : executor for node type
-WorkflowRunner --> QueueProducer : next step / delayed step / wait timeout
+WorkflowRunner --> StepOwnershipService : does this job own the run?
+WorkflowRunner --> StepNodeResolver : node + executor
+WorkflowRunner --> StepContextBuilder : run context
+WorkflowRunner --> StepExecutor : execute node
+WorkflowRunner --> StepRecorder : record completed / failed step
+WorkflowRunner --> FollowUpScheduler : next job
+WorkflowRunner --> RunStepRepository : already recorded?
+StepOwnershipService --> RunRepository : load / claim run
+StepNodeResolver --> WorkflowRepository : load version graph
+StepNodeResolver --> StepExecutorRegistry : executor for node type
+StepContextBuilder --> ProfileRepository : profile
+StepContextBuilder --> EventRepository : event that last touched the run
+StepRecorder --> RunStepRepository : step row
+StepRecorder --> RunRepository : save run / mark failed
+StepRecorder --> RunTransition : apply result to run
+FollowUpScheduler --> QueueProducer : next step / delayed step / wait timeout
 StepExecutorRegistry --> StepExecutor
 StepExecutor <|.. BranchStepExecutor
 StepExecutor <|.. DelayStepExecutor
