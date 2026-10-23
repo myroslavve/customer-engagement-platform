@@ -1,7 +1,8 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DefaultJobOptions } from 'bullmq';
-import { AppConfig } from '../config/app-config';
+import { Env } from '../config/env.schema';
 import { QueueProducer } from './queue-producer';
 import { QUEUE_EMAIL_SEND, QUEUE_EVENTS, QUEUE_WORKFLOW_STEPS } from './queue-names';
 
@@ -15,13 +16,9 @@ export const DEFAULT_JOB_OPTIONS: DefaultJobOptions = {
 @Module({
   imports: [
     BullModule.forRootAsync({
-      inject: [AppConfig],
-      useFactory: (config: AppConfig) => ({
-        connection: {
-          host: config.redis.host,
-          port: config.redis.port,
-          password: config.redis.password,
-        },
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService<Env, true>) => ({
+        connection: configService.get('REDIS_URL', { infer: true }),
       }),
     }),
     BullModule.registerQueue(

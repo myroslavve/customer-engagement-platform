@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { Queue } from 'bullmq';
-import { AppConfig } from '../src/config/app-config';
+import { envSchema } from '../src/config/env.schema';
 import { JOB_PROCESS_EVENT, processEventJobId } from '../src/queues/jobs';
 import { QUEUE_EVENTS } from '../src/queues/queue-names';
 import { DEFAULT_JOB_OPTIONS } from '../src/queues/queues.module';
@@ -11,9 +11,9 @@ async function main(): Promise<void> {
     console.error('Usage: npm run enqueue:event -- <eventId>');
     process.exit(2);
   }
-  const { redis } = AppConfig.fromEnv();
+  const { REDIS_URL } = envSchema.parse(process.env);
   const queue = new Queue(QUEUE_EVENTS, {
-    connection: redis,
+    connection: REDIS_URL,
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   const job = await queue.add(

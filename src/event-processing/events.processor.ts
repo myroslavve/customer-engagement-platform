@@ -1,7 +1,8 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { AppConfig } from '../config/app-config';
+import { ConfigService } from '@nestjs/config';
+import { Env } from '../config/env.schema';
 import { ProcessEventJob } from '../queues/jobs';
 import { QUEUE_EVENTS } from '../queues/queue-names';
 import { EventRepository } from '../workflows/event.repository';
@@ -14,7 +15,7 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
   private readonly logger = new Logger(EventsProcessor.name);
 
   constructor(
-    private readonly config: AppConfig,
+    private readonly configService: ConfigService<Env, true>,
     private readonly events: EventRepository,
     private readonly profiles: ProfileRepository,
     private readonly triggers: TriggerService,
@@ -25,7 +26,7 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
 
   /** The BullMQ worker is created by @nestjs/bullmq during module init; concurrency is set after. */
   onApplicationBootstrap(): void {
-    this.worker.concurrency = this.config.workerEventsConcurrency;
+    this.worker.concurrency = this.configService.get('WORKER_EVENTS_CONCURRENCY', { infer: true });
     this.logger.log(`Consuming "${QUEUE_EVENTS}" with concurrency ${this.worker.concurrency}`);
   }
 
