@@ -43,7 +43,8 @@ export async function createTestApp(): Promise<TestApp> {
     dataSource: app.get(DataSource),
     fakeEmailProvider,
     get: (token) => app.get(token),
-    pauseQueue: (queueName) => worker(queueName).pause(true),
+    // Not pause(true): that leaves the in-flight blocking fetch running, which still takes one job.
+    pauseQueue: (queueName) => worker(queueName).pause(),
     resumeQueue: (queueName) => worker(queueName).resume(),
     close: () => app.close(),
   };
