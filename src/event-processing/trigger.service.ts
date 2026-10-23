@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Profile, RunStatus, UserEvent } from '../database/entities';
+import { Profile } from '../database/entities/profile.entity';
+import { UserEvent } from '../database/entities/user-event.entity';
+import { RunStatus } from '../database/entities/workflow-run.entity';
 import { QueueProducer } from '../queues/queue-producer';
 import { ConditionEvaluator } from '../workflows/condition-evaluator';
 import { findNode } from '../workflows/definition';

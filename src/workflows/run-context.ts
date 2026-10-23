@@ -1,4 +1,5 @@
-import { Profile, UserEvent } from '../database/entities';
+import { Profile } from '../database/entities/profile.entity';
+import { UserEvent } from '../database/entities/user-event.entity';
 
 export interface RunContext {
   profile: {

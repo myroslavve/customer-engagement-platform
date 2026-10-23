@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Profile, UserEvent } from '../database/entities';
+import { Profile } from '../database/entities/profile.entity';
+import { UserEvent } from '../database/entities/user-event.entity';
 import { stepJobId } from '../queues/jobs';
 import { QueueProducer } from '../queues/queue-producer';
 import { ConditionEvaluator } from '../workflows/condition-evaluator';

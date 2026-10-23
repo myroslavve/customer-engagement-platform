@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
-import { RunStatus, WorkflowRun } from '../database/entities';
+import { RunStatus, WorkflowRun } from '../database/entities/workflow-run.entity';
 
 export interface CreateRunInput {
   accountId: string;
