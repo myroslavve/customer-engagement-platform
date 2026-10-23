@@ -80,6 +80,25 @@ node per job and records each executed node in `run_steps`. `EVENTS_QUEUE_CONCUR
 retries on a transient error stays in the BullMQ failed set and leaves the run where it was, so
 retrying the job resumes the run; only definition errors (missing node, no executor) fail the run.
 
+## Email
+
+A `send_email` node records one `messages` row per run and node and queues an `email-send` job; the
+run moves on at once. The `email-send` worker renders the template's `{{path}}` placeholders
+(`{{profile.traits.name}}`, `{{event.properties.product_title}}`; HTML-escaped in the body) and sends
+it, rate-limited to 2 sends/second (Resend's limit); `EMAIL_QUEUE_CONCURRENCY` (default 2) sets the
+worker concurrency.
+
+Emails go through Resend; `RESEND_API_KEY` and `EMAIL_FROM` are required. Locally a free account
+works with `EMAIL_FROM=onboarding@resend.dev`, which only delivers to the Resend account owner's
+address; deployments must set `EMAIL_FROM` to a sender on a verified domain. The Resend SDK prints its own `console.error` for every API error unless `NODE_ENV=production`.
+
+Message statuses: `queued` → `sending` → `sent` | `failed`, or `skipped`. Reasons in `messages.error`:
+`no_email` / `unsubscribed` (skipped: the profile has no address or `profiles.unsubscribed_at` is set),
+`template_not_found` (the template was deleted after the message was queued), `send_interrupted` (an
+earlier attempt reached the provider but its outcome is unknown; the email is not resent, so it is
+delivered at most once), or the provider's error after the last retry. A `send_email` node whose
+template is not one of the account's templates fails its run.
+
 ## Scripts
 
 - `npm run start` / `npm run start:dev` — run the application (HTTP API + queue processors)

@@ -68,16 +68,24 @@ package "messaging" {
     +process(job: EmailSendJob): Promise<void>
   }
   class EmailService {
-    +send(job: EmailSendJob): Promise<void>
+    +send(messageId: string, attempt: number): Promise<void>
   }
   class TemplateRenderer {
-    +render(template: Template, vars: object): RenderedEmail
+    +render(template: Template, to: string, variables: RunContext, idempotencyKey: string): RenderedEmail
   }
   interface EmailProvider {
     +send(email: RenderedEmail): Promise<SendResult>
   }
   class ResendEmailProvider
 }
+
+note right of EmailService
+  queued -> sending -> sent | failed; queued -> skipped | failed.
+  Claimed before the provider call. A definitive rejection
+  releases the message for retry; an unknown outcome ends as
+  failed/send_interrupted (at most once). A duplicate job that
+  finds a claim younger than 60 s is delayed, not failed.
+end note
 
 package "shared" {
   class ConditionEvaluator {
@@ -123,8 +131,16 @@ package "shared" {
     +findById(eventId: string): Promise<UserEvent>
   }
   class MessageRepository {
-    +create(message: object): Promise<Message>
-    +updateStatus(id: string, status: string): Promise<void>
+    +findByRunAndNode(runId: string, nodeId: string, tx?): Promise<Message | null>
+    +createIfAbsent(message: object, tx?): Promise<Message>
+    +claimForSending(id: string, tx?): Promise<boolean>
+    +releaseSending(id: string, tx?): Promise<void>
+    +markSent(id: string, providerMessageId: string | null, subject: string, attempts: number, tx?): Promise<void>
+    +markFailed(id: string, error: string, attempts: number, tx?): Promise<void>
+    +markSkipped(id: string, reason: string, attempts: number, tx?): Promise<void>
+  }
+  class TemplateRepository {
+    +findForAccount(id: string, accountId: string, tx?): Promise<Template | null>
   }
 }
 
@@ -171,15 +187,19 @@ StepExecutor <|.. WaitForEventStepExecutor
 StepExecutor <|.. SendEmailStepExecutor
 StepExecutor <|.. ExitStepExecutor
 BranchStepExecutor --> ConditionEvaluator
+SendEmailStepExecutor --> TemplateRepository : template of the account exists?
+SendEmailStepExecutor --> MessageRepository : create message (idempotent per run+node)
 SendEmailStepExecutor --> QueueProducer : email job
 
 ' ---- messaging ----
 Redis --> EmailSendProcessor : email-send jobs (retries)
 EmailSendProcessor --> EmailService
-EmailService --> ProfileRepository : recipient + vars
+EmailSendProcessor --> MessageRepository : failed (final attempt)
+EmailService --> ProfileRepository : unsubscribed?
+EmailService --> TemplateRepository : template
 EmailService --> TemplateRenderer
 EmailService --> EmailProvider
-EmailService --> MessageRepository : sent / failed
+EmailService --> MessageRepository : claim / sent / failed / skipped
 EmailProvider <|.. ResendEmailProvider
 ResendEmailProvider --> EmailDeliveryProvider : HTTPS API
 
@@ -191,11 +211,14 @@ RunStepRepository --> Database
 ProfileRepository --> Database
 EventRepository --> Database
 MessageRepository --> Database
+TemplateRepository --> Database
 AbstractRepository <|-- WorkflowRepository
 AbstractRepository <|-- RunRepository
 AbstractRepository <|-- RunStepRepository
 AbstractRepository <|-- ProfileRepository
 AbstractRepository <|-- EventRepository
+AbstractRepository <|-- MessageRepository
+AbstractRepository <|-- TemplateRepository
 
 note bottom of AbstractRepository
   Every repository method takes an optional
