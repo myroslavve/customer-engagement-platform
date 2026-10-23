@@ -16,6 +16,23 @@ const WORKFLOW_RULE_OPTIONS: RuleValidationOptions = {
   allowShorthand: false,
 };
 
+/**
+ * Rebases an audience rule onto the run context. Audience fields address the profile directly
+ * (`traits.plan`, `email`), workflow conditions address it as `profile.*`, and `event.*` means the
+ * same in both. The rule shape is preserved so the engine's ConditionEvaluator reads it unchanged.
+ */
+function toWorkflowRule(rule: unknown): unknown {
+  if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return rule;
+  const node = rule as Record<string, unknown>;
+  if (Array.isArray(node.all)) return { all: node.all.map(toWorkflowRule) };
+  if (Array.isArray(node.any)) return { any: node.any.map(toWorkflowRule) };
+  if ('not' in node) return { not: toWorkflowRule(node.not) };
+  if (typeof node.field !== 'string') return rule;
+  const root = node.field.split('.')[0];
+  const field = root === 'profile' || root === 'event' ? node.field : `profile.${node.field}`;
+  return { ...node, field };
+}
+
 type ReferencedRules = { audienceRule: Record<string, unknown> | null };
 
 @Injectable()
@@ -230,18 +247,23 @@ export class WorkflowService {
    * Snapshots the referenced audience's rule into trigger.filter so the trigger engine, which knows
    * nothing about audiences, evaluates it as part of the entry filter. The version keeps audienceId
    * for traceability, but editing the audience later does not change a stored version.
+   *
+   * The rule is rebased onto the run context first: left as an audience rule, `traits.plan` would
+   * store fine and then never match, because the engine resolves conditions against RunContext.
    */
   private withAudienceRule(
     definition: WorkflowDefinition,
     audienceRule: Record<string, unknown> | null,
   ): WorkflowDefinition {
     if (!definition.trigger.audienceId || !audienceRule) return definition;
+    const snapshot = toWorkflowRule(audienceRule) as Record<string, unknown>;
+    validateRule(snapshot, WORKFLOW_RULE_OPTIONS);
     const filter = definition.trigger.filter;
     return {
       ...definition,
       trigger: {
         ...definition.trigger,
-        filter: filter ? { all: [audienceRule, filter] } : audienceRule,
+        filter: filter ? { all: [snapshot, filter] } : snapshot,
       },
     };
   }

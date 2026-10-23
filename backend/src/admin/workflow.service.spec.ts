@@ -143,7 +143,7 @@ describe('WorkflowService', () => {
         .fn()
         .mockResolvedValueOnce({ rows: [{ id: 'template-1' }] })
         .mockResolvedValueOnce({
-          rows: [{ rule: { field: 'profile.traits.plan', op: 'eq', value: 'pro' } }],
+          rows: [{ rule: { field: 'traits.plan', op: 'eq', value: 'pro' } }],
         }),
       transaction: vi.fn((work: (client: unknown) => Promise<unknown>) =>
         work({ query: clientQuery }),
@@ -157,13 +157,50 @@ describe('WorkflowService', () => {
 
     const stored = JSON.parse(clientQuery.mock.calls[1][1][2]) as WorkflowDefinition;
     expect(stored.trigger.audienceId).toBe('audience-1');
-    // The engine only reads filter, so the audience rule is folded in alongside the entry filter.
+    // The engine only reads filter, so the audience rule is folded in alongside the entry filter,
+    // rebased from the audience namespace onto the run context it is evaluated against.
     expect(stored.trigger.filter).toEqual({
       all: [
         { field: 'profile.traits.plan', op: 'eq', value: 'pro' },
         { field: 'profile.email', op: 'exists' },
       ],
     });
+  });
+
+  it('stores an audience rule that publish accepts', async () => {
+    const audienceRule = { field: 'traits.plan', op: 'eq', value: 'pro' };
+    const clientQuery = vi
+      .fn()
+      .mockResolvedValueOnce([{ id: 'workflow-1' }])
+      .mockResolvedValueOnce([{ id: 'version-1', version: 1 }]);
+    const createDatabase = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ id: 'template-1' }] })
+        .mockResolvedValueOnce({ rows: [{ rule: audienceRule }] }),
+      transaction: vi.fn((work: (client: unknown) => Promise<unknown>) =>
+        work({ query: clientQuery }),
+      ),
+    };
+
+    await new WorkflowService(createDatabase as never).create('account-1', {
+      name: 'Welcome',
+      definition: targetedDefinition,
+    });
+    const stored = JSON.parse(clientQuery.mock.calls[1][1][2]) as WorkflowDefinition;
+
+    const publishDatabase = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ definition: stored }] })
+        .mockResolvedValueOnce({ rows: [{ id: 'template-1' }] })
+        .mockResolvedValueOnce({ rows: [{ rule: audienceRule }] })
+        .mockResolvedValueOnce({ rows: [{ id: 'workflow-1', status: 'active' }] }),
+    };
+
+    await expect(
+      new WorkflowService(publishDatabase as never).publish('account-1', 'workflow-1'),
+    ).resolves.toEqual({ id: 'workflow-1', status: 'active' });
   });
 
   it('re-checks the definition and its references before publishing', async () => {

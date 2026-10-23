@@ -115,6 +115,36 @@ describe('ActivityService', () => {
     expect(statements.some((sql) => sql.includes('FROM workflow_runs'))).toBe(true);
   });
 
+  it('applies the kind guards to an explicit type as well', async () => {
+    const database = { query: vi.fn() };
+    const service = new ActivityService(database as never);
+
+    // Events carry no status, so this asks for nothing instead of returning every event.
+    await expect(service.list('account-1', { type: 'event', status: 'failed' })).resolves.toEqual(
+      [],
+    );
+    expect(database.query).not.toHaveBeenCalled();
+  });
+
+  it('scopes messages to the workflow when one is requested', async () => {
+    const database = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [messageRow] }),
+    };
+    const service = new ActivityService(database as never);
+
+    await service.list('account-1', { workflowId: 'workflow-1' });
+
+    const statements = database.query.mock.calls.map((call) => String(call[0]));
+    expect(statements.some((sql) => sql.includes('wr.workflow_id ='))).toBe(true);
+    // Events belong to no workflow, so a workflow filter leaves runs and messages only.
+    expect(statements.some((sql) => sql.includes('FROM events'))).toBe(false);
+    expect(statements.some((sql) => sql.includes('FROM workflow_runs'))).toBe(true);
+    expect(statements.some((sql) => sql.includes('FROM messages'))).toBe(true);
+  });
+
   it('reports message status, attempts and failure detail', async () => {
     const database = { query: vi.fn().mockResolvedValueOnce({ rows: [messageRow] }) };
     const service = new ActivityService(database as never);

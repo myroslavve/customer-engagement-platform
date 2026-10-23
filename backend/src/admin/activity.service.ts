@@ -224,6 +224,8 @@ export class ActivityService {
       conditions.push(`p.external_id = $${values.length}`);
     } else {
       addFilter(conditions, values, 'm.profile_id =', scope.filter.profileId);
+      // A message belongs to a run, so a workflow filter scopes it through that run.
+      addFilter(conditions, values, 'wr.workflow_id =', scope.filter.workflowId);
       addFilter(conditions, values, 'm.status =', scope.filter.status);
       addFilter(conditions, values, 'm.created_at >=', scope.filter.from);
       addFilter(conditions, values, 'm.created_at <=', scope.filter.to);
@@ -231,7 +233,9 @@ export class ActivityService {
     values.push(limit);
     const result = await this.database.query<MessageRow>(
       `SELECT ${MESSAGE_COLUMNS}
-       FROM messages m JOIN profiles p ON p.id = m.profile_id
+       FROM messages m
+       JOIN profiles p ON p.id = m.profile_id
+       JOIN workflow_runs wr ON wr.id = m.run_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY m.created_at DESC LIMIT $${values.length}`,
       values,
@@ -258,13 +262,13 @@ export class ActivityService {
 
 /**
  * Events carry neither a workflow nor a status, so a filter for one of those is really a question
- * about runs and messages; returning every event alongside them would bury the answer.
+ * about runs and messages; returning every event alongside them would bury the answer. The rule
+ * holds for an explicit type as well, so `type=event&status=failed` asks for nothing instead of
+ * quietly ignoring the status.
  */
 function selectedKinds(filter: ActivityFilter): ActivityItemType[] {
-  if (filter.type) return [filter.type];
-  const kinds: ActivityItemType[] = ['run', 'message'];
-  if (!filter.status && !filter.workflowId) kinds.unshift('event');
-  return kinds;
+  const kinds: ActivityItemType[] = filter.type ? [filter.type] : ['event', 'run', 'message'];
+  return kinds.filter((kind) => kind !== 'event' || (!filter.status && !filter.workflowId));
 }
 
 function sortAndTrim(items: ActivityItem[], limit: number): ActivityItem[] {

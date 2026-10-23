@@ -5,8 +5,6 @@ import { BadRequestException } from '@nestjs/common';
  * malformed template is rejected at save time instead of rendering as literal text at send time.
  */
 
-/** A placeholder may not contain braces, which also rejects nesting and unclosed shapes. */
-const PLACEHOLDER = /\{\{\s*([^{}]*?)\s*\}\}/g;
 const FIELD_PATH = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 
 /** Roots of the run context a placeholder may address. */
@@ -16,22 +14,46 @@ const EVENT_KEYS = new Set(['id', 'name', 'occurredAt', 'properties']);
 
 export function validateTemplateVariables(...texts: string[]): void {
   for (const text of texts) {
-    const tokens: string[] = [];
-    const remainder = text.replace(PLACEHOLDER, (_match, path: string) => {
-      tokens.push(path);
-      return '';
-    });
-    // Anything left that looks like a brace is a token without its other half.
-    if (remainder.includes('{{') || remainder.includes('}}')) {
-      throw new BadRequestException('Template contains an unclosed or malformed placeholder');
-    }
-    tokens.forEach(assertValidPlaceholder);
+    scanPlaceholders(text).forEach(assertValidPlaceholder);
   }
 }
 
 /**
- * A bare name is a profile trait shorthand (`{{firstName}}`); a rooted path must name a real key of
- * the run context, so `{{profile.name}}` is rejected rather than silently rendering as nothing.
+ * Collects the path of every `{{path}}` in the text. Delimiters are scanned rather than matched and
+ * stripped: stripping `{{firstName}}` out of `{{{firstName}}}` leaves a balanced `{}` behind, so a
+ * brace run would pass the remainder check and reach the renderer as `{value}`.
+ */
+function scanPlaceholders(text: string): string[] {
+  const paths: string[] = [];
+  let index = 0;
+  while (index < text.length) {
+    if (text.startsWith('{{', index)) {
+      const close = text.indexOf('}}', index + 2);
+      if (close === -1) {
+        throw new BadRequestException('Template contains an unclosed placeholder');
+      }
+      const body = text.slice(index + 2, close);
+      if (body.includes('{') || body.includes('}')) {
+        throw new BadRequestException('Template contains a malformed placeholder');
+      }
+      paths.push(body.trim());
+      index = close + 2;
+      continue;
+    }
+    if (text.startsWith('}}', index)) {
+      throw new BadRequestException(
+        'Template contains a closing placeholder delimiter with no opening',
+      );
+    }
+    index += 1;
+  }
+  return paths;
+}
+
+/**
+ * A bare name is shorthand for a profile trait (`{{firstName}}`), or a profile field when no such
+ * trait exists (`{{email}}`); a rooted path must name a real key of the run context, so
+ * `{{profile.name}}` is rejected rather than silently rendering as nothing.
  */
 function assertValidPlaceholder(token: string): void {
   if (!FIELD_PATH.test(token)) {

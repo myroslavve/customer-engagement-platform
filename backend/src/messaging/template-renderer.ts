@@ -33,9 +33,19 @@ export class TemplateRenderer {
 
   private substitute(text: string, variables: RunContext, escapeHtml: boolean): string {
     return text.replace(PLACEHOLDER, (_match, path: string) => {
-      const value = this.stringify(resolvePath(variables, path));
+      const value = this.stringify(this.resolve(path, variables));
       return escapeHtml ? value.replace(HTML_SPECIAL_CHARS, (char) => HTML_ESCAPES[char]) : value;
     });
+  }
+
+  /**
+   * A bare name is shorthand for a profile trait (`{{firstName}}`), falling back to a profile field
+   * when there is no such trait (`{{email}}`); a dotted path is looked up as written.
+   */
+  private resolve(path: string, variables: RunContext): unknown {
+    const direct = resolvePath(variables, path);
+    if (direct !== undefined || path.includes('.')) return direct;
+    return resolvePath(variables.profile, `traits.${path}`) ?? resolvePath(variables.profile, path);
   }
 
   /** Primitives render as text; missing, null, objects and arrays render as nothing. */
