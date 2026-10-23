@@ -1,4 +1,5 @@
 import { RunStatus } from '../enums/run-status.enum';
+import { RunState } from './run-state.types';
 
 export type CreateRunInput = {
   accountId: string;
@@ -8,6 +9,6 @@ export type CreateRunInput = {
   triggerEventId: string;
   status: RunStatus;
   currentNodeId: string | null;
-  context: Record<string, unknown>;
+  context: RunState;
   finishedAt: Date | null;
 };
