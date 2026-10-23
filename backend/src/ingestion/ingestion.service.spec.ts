@@ -2,7 +2,9 @@ import { ConflictException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { IngestionService } from './ingestion.service';
 
-function createService(overrides: { claimed?: boolean; transactionError?: Error } = {}) {
+function createService(
+  overrides: { claimed?: boolean; transactionError?: Error; outboxRemoveError?: Error } = {},
+) {
   const transaction = {};
   const configService = { get: vi.fn().mockReturnValue({ accountId: 'account-1' }) };
   const idempotencyService = {
@@ -17,7 +19,12 @@ function createService(overrides: { claimed?: boolean; transactionError?: Error 
     createIfAbsent: vi.fn().mockResolvedValue('event-1'),
   };
   const profileRepository = { upsert: vi.fn().mockResolvedValue('profile-1') };
-  const eventOutboxRepository = { add: vi.fn().mockResolvedValue(undefined) };
+  const eventOutboxRepository = {
+    add: vi.fn().mockResolvedValue(undefined),
+    removeByEventId: overrides.outboxRemoveError
+      ? vi.fn().mockRejectedValue(overrides.outboxRemoveError)
+      : vi.fn().mockResolvedValue(undefined),
+  };
   const queueProducer = { enqueueProcessEvent: vi.fn().mockResolvedValue(undefined) };
   const service = new IngestionService(
     configService as never,
@@ -53,6 +60,19 @@ describe('IngestionService', () => {
     );
     expect(eventOutboxRepository.add).toHaveBeenCalledWith('event-1', transaction);
     expect(queueProducer.enqueueProcessEvent).toHaveBeenCalledWith({ eventId: 'event-1' });
+    expect(eventOutboxRepository.removeByEventId).toHaveBeenCalledWith('event-1');
+  });
+
+  it('still accepts the event when removing the outbox row fails', async () => {
+    const { service, idempotencyService } = createService({
+      outboxRemoveError: new Error('database unavailable'),
+    });
+
+    await expect(service.identify({ userId: 'user-1', messageId: 'message-1' })).resolves.toEqual({
+      accepted: true,
+      eventId: 'event-1',
+    });
+    expect(idempotencyService.release).not.toHaveBeenCalled();
   });
 
   it('releases the idempotency claim when persistence or queueing fails', async () => {

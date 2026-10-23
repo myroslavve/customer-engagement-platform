@@ -69,7 +69,7 @@ package "Public Ingestion API" {
   IngestionService --> IdempotencyService
   IngestionService --> ProfileRepository
   IngestionService --> EventRepository
-  IngestionService --> EventOutboxRepository
+  IngestionService --> EventOutboxRepository : add / remove
   IngestionService --> QueueProducer
   OutboxService --> EventOutboxRepository
   OutboxService --> QueueProducer
@@ -86,7 +86,8 @@ note right of IngestionService
 
   Validate -> dedupe (claim messageId) ->
   persist profile + event + outbox row
-  in one transaction -> enqueue process-event.
+  in one transaction -> enqueue process-event ->
+  delete the outbox row (best effort).
   Failure releases the claim (client may retry).
 end note
 

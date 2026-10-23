@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppConfig } from '../config/configuration';
 import { QueueProducer } from '../queues/queue-producer';
@@ -13,11 +13,14 @@ const IDENTIFY_EVENT_NAME = 'identify';
 
 /**
  * validate (ValidationPipe) -> dedupe (Redis messageId claim) -> persist (profile upsert, event,
- * outbox row in one transaction) -> enqueue process-event. A failure releases the claim so the
- * client can retry; the outbox re-publishes jobs whose enqueue did not happen.
+ * outbox row in one transaction) -> enqueue process-event -> delete the outbox row. A failure
+ * releases the claim so the client can retry; the outbox publisher re-publishes jobs whose enqueue
+ * did not happen (crash or Redis failure between commit and enqueue).
  */
 @Injectable()
 export class IngestionService {
+  private readonly logger = new Logger(IngestionService.name);
+
   constructor(
     private readonly configService: ConfigService<AppConfig, true>,
     private readonly idempotencyService: IdempotencyService,
@@ -88,11 +91,30 @@ export class IngestionService {
         return { eventId: newEventId, created: true };
       });
 
-      if (eventId && created) await this.queueProducer.enqueueProcessEvent({ eventId });
+      if (eventId && created) {
+        await this.queueProducer.enqueueProcessEvent({ eventId });
+        await this.removeOutboxEntry(eventId);
+      }
       return { accepted: true, eventId };
     } catch (error) {
       await this.idempotencyService.release(accountId, input.messageId);
       throw error;
+    }
+  }
+
+  /**
+   * The job is queued, so the outbox row is no longer needed. Best effort: the event is stored and
+   * queued, so a failed delete must not fail the request; the outbox publisher removes it later.
+   */
+  private async removeOutboxEntry(eventId: string): Promise<void> {
+    try {
+      await this.eventOutboxRepository.removeByEventId(eventId);
+    } catch (error) {
+      this.logger.warn({
+        message: 'Failed to remove outbox entry after enqueue',
+        eventId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 }
