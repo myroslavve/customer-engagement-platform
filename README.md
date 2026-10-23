@@ -27,8 +27,7 @@ If ports 5432/6379 are taken on your machine, set `POSTGRES_PORT`/`REDIS_PORT` i
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` (PRs and `main`): format check, lint, typecheck, build, tests; then
-  against real PostgreSQL and Redis services: migrations up/down/up and an application boot smoke test.
+- `.github/workflows/ci.yml` (PRs and `main`): format check, lint, typecheck, build, tests.
 - `.github/workflows/cd.yml` (`main` and `v*` tags): builds the application image from `Dockerfile`
   and pushes it to `ghcr.io/<owner>/<repo>` (tags: commit sha, branch, semver).
   Run `npm run migration:run:prod` from the image before rolling out a new version.
