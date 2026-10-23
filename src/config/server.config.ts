@@ -3,7 +3,8 @@ import { z } from 'zod';
 export const ServerConfigSchema = z.object({
   env: z.enum(['development', 'test', 'production']).default('development'),
   port: z.coerce.number().int().positive().default(3000),
-  logLevel: z.enum(['error', 'warn', 'log', 'debug', 'verbose']).default('log'),
+  /** winston level; Nest's log() maps to info. */
+  logLevel: z.enum(['error', 'warn', 'info', 'verbose', 'debug']).default('info'),
 });
 
 export type ServerConfig = z.infer<typeof ServerConfigSchema>;

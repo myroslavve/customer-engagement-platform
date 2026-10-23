@@ -27,7 +27,8 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
   /** The BullMQ worker is created by @nestjs/bullmq during module init; concurrency is set after. */
   onApplicationBootstrap(): void {
     this.worker.concurrency = this.configService.get('queue', { infer: true }).eventsConcurrency;
-    this.logger.log('Consuming queue', {
+    this.logger.log({
+      message: 'Consuming queue',
       queue: QUEUE_EVENTS,
       concurrency: this.worker.concurrency,
     });
@@ -42,8 +43,8 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
       await this.processEvent(job.data.eventId);
     } catch (error) {
       this.logger.error(
-        'process-event attempt failed',
         {
+          message: 'process-event attempt failed',
           jobId: job.id,
           eventId: job.data.eventId,
           attempt: job.attemptsStarted,

@@ -48,7 +48,8 @@ export class WaitingRunService {
       };
       const claimed = await this.runRepository.claim(run.id, node.id, stepJobId(job));
       if (!claimed) {
-        this.logger.debug('Run not claimed: already continued', {
+        this.logger.debug({
+          message: 'Run not claimed: already continued',
           runId: run.id,
           eventId: event.id,
         });

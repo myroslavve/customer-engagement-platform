@@ -44,7 +44,8 @@ export class TriggerService {
       });
 
       if (!run) {
-        this.logger.log('Run not started: a live run already exists', {
+        this.logger.log({
+          message: 'Run not started: a live run already exists',
           workflowId: version.workflowId,
           profileId: profile.id,
           eventId: event.id,
@@ -52,10 +53,11 @@ export class TriggerService {
         continue;
       }
       if (run.status !== RunStatus.Running) {
-        this.logger.error('Run not started: created in a terminal status', {
+        this.logger.error({
+          message: 'Run not started: created in a terminal status',
           runId: run.id,
           status: run.status,
-          context: run.context,
+          runContext: run.context,
         });
         continue;
       }
