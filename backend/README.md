@@ -68,9 +68,33 @@ that did not reach the queue.
 { "userId": "user-123", "eventName": "item_viewed", "properties": { "itemId": "item-456" }, "messageId": "msg-124" }
 ```
 
-**Admin** (`Authorization: Bearer <token>`): `POST /admin/auth/login` with `{ email, password }`
-returns `{ accessToken }` (8 h). Audience previews scan profiles in bounded batches; pushing rule
-evaluation into SQL/JSONB is a future scalability improvement.
+**Admin** (`Authorization: Bearer <token>` unless noted):
+
+- `POST /admin/auth/register` (public, 3/min) — `{ accountName, email, password }` creates an
+  account and its first admin, then returns `{ accessToken, account }`. One admin belongs to one
+  account; there is no membership or account-switching flow. Emails are globally unique because
+  login identifies the account by email.
+- `POST /admin/auth/login` — `{ email, password }` returns `{ accessToken }` (8 h).
+- `GET /admin/auth/me` — current principal (`userId`, `accountId`, `email`, `role`).
+- `POST /admin/auth/password` — `{ currentPassword, newPassword }` returns a fresh
+  `{ accessToken }`. It bumps the admin's token version, so the other sessions are rejected
+  immediately.
+- `GET /admin/account` / `PATCH /admin/account` — read or rename (`{ name }`) the current account.
+- `GET /admin/users`, `POST /admin/users` (`{ email, password }`), `PATCH /admin/users/:id`
+  (`{ password }` reset), `DELETE /admin/users/:id` — admins in the current account. Self-deletion
+  and deleting the last admin are rejected.
+- `POST /admin/auth/api-keys`, `GET /admin/auth/api-keys`, `DELETE /admin/auth/api-keys/:id` —
+  ingestion API keys.
+
+The guard verifies the JWT and checks `admin_users.token_version` on every admin request. Deleting
+an admin or changing a password therefore invalidates existing tokens immediately; the trade-off is
+one indexed database read per admin request. Audience previews scan profiles in bounded batches;
+pushing rule evaluation into SQL/JSONB is a future scalability improvement.
+
+For deployments, run migrations before starting the new application version. During a rolling
+upgrade, old application instances do not check token versions, so immediate token revocation is
+guaranteed only after all old instances have been replaced. Do not route authenticated traffic to
+an older version after enabling token-version revocation.
 
 ## Queue processing
 
