@@ -71,6 +71,14 @@ that did not reach the queue.
 `{ accessToken }` (8 h). `/admin/templates`, `/admin/audiences`, `/admin/workflows`, `/admin/activity` are
 placeholders (`501`) until their modules land.
 
+## Queue processing
+
+The `events` worker starts runs and resumes waiting ones; the `workflow-steps` worker executes a run one
+node per job and records each executed node in `run_steps`. `EVENTS_QUEUE_CONCURRENCY` and
+`STEPS_QUEUE_CONCURRENCY` (default 10 each) set the worker concurrency. A step job that exhausts its
+retries on a transient error stays in the BullMQ failed set and leaves the run where it was, so
+retrying the job resumes the run; only definition errors (missing node, no executor) fail the run.
+
 ## Scripts
 
 - `npm run start` / `npm run start:dev` — run the application (HTTP API + queue processors)
