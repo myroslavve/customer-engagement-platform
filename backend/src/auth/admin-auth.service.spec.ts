@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { AdminAuthService } from './admin-auth.service';
+import { AdminPrincipal } from './admin.types';
 
 const PASSWORD_HASH = '$2b$04$BArz8aDmtenAzDO/o4ufR.JZeY6RE5wSxdnaO3UG0cg/9dg/VG0zy';
 
@@ -130,14 +131,51 @@ describe('AdminAuthService', () => {
           email: 'admin@example.com',
           role: 'admin',
           tokenVersion: 3,
-        },
+          iat: 1_700_000_000,
+          exp: 1_700_028_800,
+        } as AdminPrincipal,
         'password',
         'new-password',
       ),
     ).resolves.toEqual({ accessToken: 'new-token' });
-    expect(jwt.sign).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-1', tokenVersion: 4 }),
+    expect(jwt.sign).toHaveBeenCalledWith({
+      userId: 'user-1',
+      accountId: 'account-1',
+      email: 'admin@example.com',
+      role: 'admin',
+      tokenVersion: 4,
+    });
+    expect(database.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('token_version = $4 AND password_hash = $5'),
+      [expect.any(String), 'user-1', 'account-1', 3, PASSWORD_HASH],
     );
+  });
+
+  it('does not overwrite a password reset that races with self-service change', async () => {
+    const database = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ password_hash: PASSWORD_HASH }] })
+        .mockResolvedValueOnce({ rows: [] }),
+    };
+    const jwt = { sign: vi.fn() };
+    const service = new AdminAuthService(database as never, jwt as never);
+
+    await expect(
+      service.changePassword(
+        {
+          userId: 'user-1',
+          accountId: 'account-1',
+          email: 'admin@example.com',
+          role: 'admin',
+          tokenVersion: 3,
+        },
+        'password',
+        'attacker-password',
+      ),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(jwt.sign).not.toHaveBeenCalled();
   });
 
   it('rejects a password change with the wrong current password', async () => {

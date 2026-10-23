@@ -19,6 +19,8 @@ const payload = {
   email: 'admin@example.com',
   role: 'admin',
   tokenVersion: 2,
+  iat: 1_700_000_000,
+  exp: 1_700_028_800,
 };
 
 describe('AdminAuthGuard', () => {
@@ -31,7 +33,13 @@ describe('AdminAuthGuard', () => {
     const { context, request } = requestContext('token');
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(request.user).toMatchObject({ userId: 'user-1', tokenVersion: 2 });
+    expect(request.user).toEqual({
+      userId: 'user-1',
+      accountId: 'account-1',
+      email: 'admin@example.com',
+      role: 'admin',
+      tokenVersion: 2,
+    });
   });
 
   it('accepts a legacy token without a version when the user is at version zero', async () => {

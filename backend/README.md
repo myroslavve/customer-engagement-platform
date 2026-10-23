@@ -91,6 +91,11 @@ an admin or changing a password therefore invalidates existing tokens immediatel
 one indexed database read per admin request. Audience previews scan profiles in bounded batches;
 pushing rule evaluation into SQL/JSONB is a future scalability improvement.
 
+For deployments, run migrations before starting the new application version. During a rolling
+upgrade, old application instances do not check token versions, so immediate token revocation is
+guaranteed only after all old instances have been replaced. Do not route authenticated traffic to
+an older version after enabling token-version revocation.
+
 ## Scripts
 
 - `npm run start` / `npm run start:dev` — run the application (HTTP API + queue processors)

@@ -13,6 +13,7 @@ export class AdminAuthGuard implements CanActivate {
     private readonly database: AdminDatabaseService,
   ) {}
 
+  /** Validates the JWT against the current admin record and token version. */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{
       headers: Record<string, string>;
@@ -48,7 +49,13 @@ export class AdminAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid bearer token');
     }
 
-    request.user = { ...payload, tokenVersion: user.token_version };
+    request.user = {
+      userId: payload.userId,
+      accountId: payload.accountId,
+      email: payload.email,
+      role: payload.role,
+      tokenVersion: user.token_version,
+    };
     return true;
   }
 }

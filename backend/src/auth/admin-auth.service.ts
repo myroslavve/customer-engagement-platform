@@ -90,17 +90,19 @@ export class AdminAuthService {
     };
   }
 
+  /** Changes credentials only if the verified password and token version are still current. */
   async changePassword(
     principal: AdminPrincipal,
     currentPassword: string,
     newPassword: string,
   ): Promise<{ accessToken: string }> {
     const result = await this.database.query<{ password_hash: string }>(
-      `SELECT password_hash FROM admin_users WHERE id = $1 AND account_id = $2`,
-      [principal.userId, principal.accountId],
+      `SELECT password_hash FROM admin_users
+       WHERE id = $1 AND account_id = $2 AND token_version = $3`,
+      [principal.userId, principal.accountId, principal.tokenVersion],
     );
     const user = result.rows[0];
-    if (!user) throw new UnauthorizedException('Admin account not found');
+    if (!user) throw new UnauthorizedException('Admin credentials have changed');
     if (!(await compare(currentPassword, user.password_hash))) {
       throw new BadRequestException('Current password is incorrect');
     }
@@ -109,14 +111,26 @@ export class AdminAuthService {
     const updated = await this.database.query<{ token_version: number }>(
       `UPDATE admin_users
        SET password_hash = $1, token_version = token_version + 1, updated_at = NOW()
-       WHERE id = $2 AND account_id = $3
+       WHERE id = $2 AND account_id = $3 AND token_version = $4 AND password_hash = $5
        RETURNING token_version`,
-      [passwordHash, principal.userId, principal.accountId],
+      [
+        passwordHash,
+        principal.userId,
+        principal.accountId,
+        principal.tokenVersion,
+        user.password_hash,
+      ],
     );
     const row = updated.rows[0];
-    if (!row) throw new UnauthorizedException('Admin account not found');
+    if (!row) throw new UnauthorizedException('Admin credentials have changed');
     return {
-      accessToken: this.jwtService.sign({ ...principal, tokenVersion: row.token_version }),
+      accessToken: this.jwtService.sign({
+        userId: principal.userId,
+        accountId: principal.accountId,
+        email: principal.email,
+        role: principal.role,
+        tokenVersion: row.token_version,
+      }),
     };
   }
 
