@@ -3,9 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AppConfig } from '../config/configuration';
 import { DatabaseModule } from '../database/database.module';
+import { AccountController } from './account.controller';
+import { AccountService } from './account.service';
 import { AdminAuthController } from './admin-auth.controller';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminAuthService } from './admin-auth.service';
+import { AdminUsersController } from './admin-users.controller';
+import { AdminUsersService } from './admin-users.service';
 
 @Module({
   imports: [
@@ -19,8 +23,8 @@ import { AdminAuthService } from './admin-auth.service';
       }),
     }),
   ],
-  controllers: [AdminAuthController],
-  providers: [AdminAuthGuard, AdminAuthService],
+  controllers: [AdminAuthController, AccountController, AdminUsersController],
+  providers: [AdminAuthGuard, AdminAuthService, AccountService, AdminUsersService],
   exports: [AdminAuthGuard, JwtModule],
 })
 export class AuthModule {}
