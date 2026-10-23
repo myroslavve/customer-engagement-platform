@@ -1,13 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AbstractRepository } from '../database/abstract.repository';
 import { Profile } from '../database/entities/profile.entity';
 
 @Injectable()
-export class ProfileRepository {
-  constructor(@InjectRepository(Profile) private readonly profiles: Repository<Profile>) {}
-
-  findById(profileId: string): Promise<Profile | null> {
-    return this.profiles.findOne({ where: { id: profileId } });
+export class ProfileRepository extends AbstractRepository<Profile> {
+  constructor(@InjectRepository(Profile) profileRepository: Repository<Profile>) {
+    super(profileRepository);
   }
 }

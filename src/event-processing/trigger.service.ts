@@ -14,23 +14,23 @@ export class TriggerService {
   private readonly logger = new Logger(TriggerService.name);
 
   constructor(
-    private readonly workflows: WorkflowRepository,
-    private readonly runs: RunRepository,
-    private readonly conditions: ConditionEvaluator,
-    private readonly producer: QueueProducer,
+    private readonly workflowRepository: WorkflowRepository,
+    private readonly runRepository: RunRepository,
+    private readonly conditionEvaluator: ConditionEvaluator,
+    private readonly queueProducer: QueueProducer,
   ) {}
 
   /** Starts a run for every active workflow triggered by this event whose entry filter passes. */
   async startMatchingRuns(event: UserEvent, profile: Profile): Promise<void> {
-    const versions = await this.workflows.findActiveByTrigger(event.accountId, event.name);
+    const versions = await this.workflowRepository.findActiveByTrigger(event.accountId, event.name);
     const ctx = buildRunContext(profile, event);
 
     for (const version of versions) {
       const { trigger, entryNodeId } = version.definition;
-      if (trigger.filter && !this.conditions.evaluate(trigger.filter, ctx)) continue;
+      if (trigger.filter && !this.conditionEvaluator.evaluate(trigger.filter, ctx)) continue;
 
       const entryNode = findNode(version.definition, entryNodeId);
-      const run = await this.runs.createIfAbsent({
+      const run = await this.runRepository.createIfAbsent({
         accountId: event.accountId,
         workflowId: version.workflowId,
         workflowVersionId: version.id,
@@ -52,7 +52,7 @@ export class TriggerService {
         this.logger.error(`Run ${run.id} created as ${run.status}: ${JSON.stringify(run.context)}`);
         continue;
       }
-      await this.producer.enqueueStep({ runId: run.id, nodeId: entryNodeId, cause: 'enter' });
+      await this.queueProducer.enqueueStep({ runId: run.id, nodeId: entryNodeId, cause: 'enter' });
     }
   }
 }

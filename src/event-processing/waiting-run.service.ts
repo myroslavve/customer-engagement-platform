@@ -14,15 +14,15 @@ export class WaitingRunService {
   private readonly logger = new Logger(WaitingRunService.name);
 
   constructor(
-    private readonly workflows: WorkflowRepository,
-    private readonly runs: RunRepository,
-    private readonly conditions: ConditionEvaluator,
-    private readonly producer: QueueProducer,
+    private readonly workflowRepository: WorkflowRepository,
+    private readonly runRepository: RunRepository,
+    private readonly conditionEvaluator: ConditionEvaluator,
+    private readonly queueProducer: QueueProducer,
   ) {}
 
   /** Resumes runs of this profile that wait for this event name and whose wait filter passes. */
   async resumeWaitingRuns(event: UserEvent, profile: Profile): Promise<void> {
-    const candidates = await this.runs.findWaiting(
+    const candidates = await this.runRepository.findWaiting(
       event.accountId,
       profile.id,
       event.name,
@@ -32,18 +32,18 @@ export class WaitingRunService {
 
     for (const run of candidates) {
       if (!run.currentNodeId) continue;
-      const version = await this.workflows.getVersion(run.workflowVersionId);
+      const version = await this.workflowRepository.getVersion(run.workflowVersionId);
       const node = findNode(version.definition, run.currentNodeId);
       if (!node || node.type !== 'wait_for_event' || node.eventName !== event.name) continue;
-      if (node.filter && !this.conditions.evaluate(node.filter, ctx)) continue;
+      if (node.filter && !this.conditionEvaluator.evaluate(node.filter, ctx)) continue;
 
       const job = { runId: run.id, nodeId: node.id, cause: 'event' as const, eventId: event.id };
-      const claimed = await this.runs.claim(run.id, node.id, stepJobId(job));
+      const claimed = await this.runRepository.claim(run.id, node.id, stepJobId(job));
       if (!claimed) {
         this.logger.debug(`Run ${run.id} not claimed for event ${event.id}: already continued`);
         continue;
       }
-      await this.producer.enqueueStep(job);
+      await this.queueProducer.enqueueStep(job);
     }
   }
 }

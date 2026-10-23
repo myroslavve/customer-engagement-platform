@@ -60,6 +60,14 @@ package "shared" {
     +enqueueStep(job: StepJob, delayMs?: number): Promise<void>
     +enqueueEmail(job: EmailSendJob): Promise<void>
   }
+  abstract class "AbstractRepository<T>" as AbstractRepository {
+    +transaction(work: (tx) => Promise<R>): Promise<R>
+    +find(options, tx?): Promise<T[]>
+    +findOne(options, tx?): Promise<T | null>
+    +findById(id: string, tx?): Promise<T | null>
+    +findByIdOrFail(id: string, tx?): Promise<T>
+    +save(entity, tx?): Promise<T>
+  }
   class WorkflowRepository {
     +findActiveByTrigger(accountId: string, eventName: string): Promise<WorkflowVersion[]>
     +getVersion(versionId: string): Promise<WorkflowVersion>
@@ -133,6 +141,16 @@ RunRepository --> Database
 ProfileRepository --> Database
 EventRepository --> Database
 MessageRepository --> Database
+AbstractRepository <|-- WorkflowRepository
+AbstractRepository <|-- RunRepository
+AbstractRepository <|-- ProfileRepository
+AbstractRepository <|-- EventRepository
+
+note bottom of AbstractRepository
+  Every repository method takes an optional
+  transaction (tx); without it the call runs
+  on the default connection.
+end note
 
 note right of RunRepository
   claim() is an atomic conditional update keyed by

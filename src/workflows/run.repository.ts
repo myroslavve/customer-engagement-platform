@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
+import { AbstractRepository, Transaction } from '../database/abstract.repository';
 import { RunStatus, WorkflowRun } from '../database/entities/workflow-run.entity';
 
 export interface CreateRunInput {
@@ -17,16 +18,21 @@ export interface CreateRunInput {
 }
 
 @Injectable()
-export class RunRepository {
-  constructor(@InjectRepository(WorkflowRun) private readonly runs: Repository<WorkflowRun>) {}
+export class RunRepository extends AbstractRepository<WorkflowRun> {
+  constructor(@InjectRepository(WorkflowRun) workflowRunRepository: Repository<WorkflowRun>) {
+    super(workflowRunRepository);
+  }
 
   /**
    * INSERT ... ON CONFLICT DO NOTHING, then SELECT by (workflowVersionId, triggerEventId).
    * Returns the run for this trigger event (fresh or pre-existing), or null when the conflict was
    * the live-run-per-profile index (another run of this workflow is live for the profile).
    */
-  async createIfAbsent(input: CreateRunInput): Promise<WorkflowRun | null> {
-    await this.runs
+  async createIfAbsent(
+    input: CreateRunInput,
+    transaction?: Transaction,
+  ): Promise<WorkflowRun | null> {
+    await this.getRepository(transaction)
       .createQueryBuilder()
       .insert()
       .into(WorkflowRun)
@@ -34,15 +40,12 @@ export class RunRepository {
       .values(input as QueryDeepPartialEntity<WorkflowRun>)
       .orIgnore()
       .execute();
-    return this.runs.findOne({
-      where: { workflowVersionId: input.workflowVersionId, triggerEventId: input.triggerEventId },
-    });
-  }
-
-  async findById(runId: string): Promise<WorkflowRun> {
-    const run = await this.runs.findOne({ where: { id: runId } });
-    if (!run) throw new NotFoundException(`Workflow run ${runId} not found`);
-    return run;
+    return this.findOne(
+      {
+        where: { workflowVersionId: input.workflowVersionId, triggerEventId: input.triggerEventId },
+      },
+      transaction,
+    );
   }
 
   /**
@@ -54,12 +57,14 @@ export class RunRepository {
     profileId: string,
     eventName: string,
     eventId: string,
+    transaction?: Transaction,
   ): Promise<WorkflowRun[]> {
-    const live = await this.runs.find({
-      where: { accountId, profileId, status: In([RunStatus.Waiting, RunStatus.Running]) },
-    });
+    const liveRuns = await this.find(
+      { where: { accountId, profileId, status: In([RunStatus.Waiting, RunStatus.Running]) } },
+      transaction,
+    );
     const claimSuffix = `__event__${eventId}`;
-    return live.filter(
+    return liveRuns.filter(
       (run) =>
         (run.status === RunStatus.Waiting && run.waitingForEvent === eventName) ||
         (run.status === RunStatus.Running &&
@@ -72,8 +77,13 @@ export class RunRepository {
    * Atomic conditional update: only one of "event arrived" / "timeout" can continue a waiting run.
    * The claimKey arm lets a retried job re-win its own claim after a failed enqueue.
    */
-  async claim(runId: string, nodeId: string, claimKey: string): Promise<boolean> {
-    const result = await this.runs
+  async claim(
+    runId: string,
+    nodeId: string,
+    claimKey: string,
+    transaction?: Transaction,
+  ): Promise<boolean> {
+    const result = await this.getRepository(transaction)
       .createQueryBuilder()
       .update(WorkflowRun)
       .set({ status: RunStatus.Running, claimKey })
@@ -83,9 +93,5 @@ export class RunRepository {
       )
       .execute();
     return result.affected === 1;
-  }
-
-  async save(run: WorkflowRun): Promise<void> {
-    await this.runs.save(run);
   }
 }

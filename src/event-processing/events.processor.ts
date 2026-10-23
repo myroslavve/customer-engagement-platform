@@ -16,10 +16,10 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
 
   constructor(
     private readonly configService: ConfigService<Env, true>,
-    private readonly events: EventRepository,
-    private readonly profiles: ProfileRepository,
-    private readonly triggers: TriggerService,
-    private readonly waitingRuns: WaitingRunService,
+    private readonly eventRepository: EventRepository,
+    private readonly profileRepository: ProfileRepository,
+    private readonly triggerService: TriggerService,
+    private readonly waitingRunService: WaitingRunService,
   ) {
     super();
   }
@@ -32,13 +32,13 @@ export class EventsProcessor extends WorkerHost implements OnApplicationBootstra
 
   /** Throws on missing rows so BullMQ retries; producers enqueue after commit, so this is rare. */
   async process(job: Job<ProcessEventJob, void, string>): Promise<void> {
-    const event = await this.events.findById(job.data.eventId);
+    const event = await this.eventRepository.findById(job.data.eventId);
     if (!event) throw new Error(`Event ${job.data.eventId} not found`);
-    const profile = await this.profiles.findById(event.profileId);
+    const profile = await this.profileRepository.findById(event.profileId);
     if (!profile) throw new Error(`Profile ${event.profileId} not found for event ${event.id}`);
 
-    await this.triggers.startMatchingRuns(event, profile);
-    await this.waitingRuns.resumeWaitingRuns(event, profile);
+    await this.triggerService.startMatchingRuns(event, profile);
+    await this.waitingRunService.resumeWaitingRuns(event, profile);
   }
 
   /** Fires on every failed attempt; BullMQ keeps only the final state, so log each one here. */
