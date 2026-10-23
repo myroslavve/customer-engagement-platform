@@ -1,6 +1,10 @@
-import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
-import { envBoolean, parseConfig } from './parse-config';
+
+/** Env flags arrive as strings; z.coerce.boolean() would read "false" as true. */
+const envFlag = z
+  .enum(['true', 'false'])
+  .default('false')
+  .transform((value) => value === 'true');
 
 export const DatabaseConfigSchema = z.object({
   host: z.string().min(1).default('localhost'),
@@ -8,21 +12,22 @@ export const DatabaseConfigSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
   database: z.string().min(1),
-  logging: envBoolean.default('false'),
-  ssl: envBoolean.default('false'),
+  logging: envFlag,
+  ssl: envFlag,
 });
 
 export type DatabaseConfig = z.infer<typeof DatabaseConfigSchema>;
 
 /** Also called directly by the TypeORM CLI data source, outside Nest. */
-export const databaseConfig = registerAs('database', (): DatabaseConfig =>
-  parseConfig('database', DatabaseConfigSchema, {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    logging: process.env.DB_LOGGING,
-    ssl: process.env.DB_SSL,
-  }),
-);
+export function databaseConfig(): DatabaseConfig {
+  // `|| undefined`: an empty VAR= in .env means "not set"
+  return DatabaseConfigSchema.parse({
+    host: process.env.DB_HOST || undefined,
+    port: process.env.DB_PORT || undefined,
+    username: process.env.DB_USERNAME || undefined,
+    password: process.env.DB_PASSWORD || undefined,
+    database: process.env.DB_NAME || undefined,
+    logging: process.env.DB_LOGGING || undefined,
+    ssl: process.env.DB_SSL || undefined,
+  });
+}

@@ -1,6 +1,4 @@
-import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
-import { parseConfig } from './parse-config';
 
 /** Shape matches ioredis connection options, so BullMQ takes it as is. */
 export const RedisConfigSchema = z.object({
@@ -13,12 +11,13 @@ export const RedisConfigSchema = z.object({
 
 export type RedisConfig = z.infer<typeof RedisConfigSchema>;
 
-export const redisConfig = registerAs('redis', (): RedisConfig =>
-  parseConfig('redis', RedisConfigSchema, {
-    host: process.env.REDIS_HOST,
-    port: process.env.REDIS_PORT,
-    username: process.env.REDIS_USERNAME,
-    password: process.env.REDIS_PASSWORD,
-    db: process.env.REDIS_DB,
-  }),
-);
+export function redisConfig(): RedisConfig {
+  // `|| undefined`: an empty VAR= in .env means "not set"
+  return RedisConfigSchema.parse({
+    host: process.env.REDIS_HOST || undefined,
+    port: process.env.REDIS_PORT || undefined,
+    username: process.env.REDIS_USERNAME || undefined,
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: process.env.REDIS_DB || undefined,
+  });
+}

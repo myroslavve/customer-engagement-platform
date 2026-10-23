@@ -1,10 +1,11 @@
 import { join } from 'node:path';
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigType } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSourceOptions } from 'typeorm';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
-import { DatabaseConfig, databaseConfig } from '../config/db.config';
+import { AppConfig } from '../config/configuration';
+import { DatabaseConfig } from '../config/db.config';
 import { Account } from './entities/account.entity';
 import { Profile } from './entities/profile.entity';
 import { UserEvent } from './entities/user-event.entity';
@@ -35,9 +36,9 @@ export function buildDataSourceOptions(config: DatabaseConfig): DataSourceOption
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule.forFeature(databaseConfig)],
-      inject: [databaseConfig.KEY],
-      useFactory: (config: ConfigType<typeof databaseConfig>) => buildDataSourceOptions(config),
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService<AppConfig, true>) =>
+        buildDataSourceOptions(configService.get('database', { infer: true })),
     }),
   ],
 })

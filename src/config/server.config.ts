@@ -1,6 +1,4 @@
-import { registerAs } from '@nestjs/config';
 import { z } from 'zod';
-import { parseConfig } from './parse-config';
 
 export const ServerConfigSchema = z.object({
   env: z.enum(['development', 'test', 'production']).default('development'),
@@ -10,10 +8,10 @@ export const ServerConfigSchema = z.object({
 
 export type ServerConfig = z.infer<typeof ServerConfigSchema>;
 
-export const serverConfig = registerAs('server', (): ServerConfig =>
-  parseConfig('server', ServerConfigSchema, {
+export function serverConfig(): ServerConfig {
+  return ServerConfigSchema.parse({
     env: process.env.NODE_ENV,
     port: process.env.PORT,
     logLevel: process.env.LOG_LEVEL,
-  }),
-);
+  });
+}

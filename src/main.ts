@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
-import { ConfigType } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { serverConfig } from './config/server.config';
+import { AppConfig } from './config/configuration';
 import { AppLogger } from './logging/app-logger';
 
 /** Single process: HTTP API and BullMQ consumers run in the same Nest application. */
@@ -13,7 +13,9 @@ async function bootstrap(): Promise<void> {
     bufferLogs: true,
     abortOnError: false,
   });
-  const config = app.get<ConfigType<typeof serverConfig>>(serverConfig.KEY);
+  const config = app
+    .get<ConfigService<AppConfig, true>>(ConfigService)
+    .get('server', { infer: true });
   app.useLogger(new AppLogger(config.logLevel));
   app.enableShutdownHooks();
   await app.listen(config.port);
