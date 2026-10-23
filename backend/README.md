@@ -11,16 +11,13 @@ This directory contains the API and its infrastructure integration. Worker imple
    ```
 
 2. Copy `backend\.env.example` to `backend\.env` and set local secrets.
-3. Install backend dependencies before generating the password hash:
+3. Install backend dependencies:
 
    ```powershell
    cd backend
    npm install
    ```
 
-   Generate an admin password hash from the backend directory with
-   `node -e "require('bcryptjs').hash(process.argv[1], 12).then(console.log)" "your-password"`
-   and set the result as `ADMIN_PASSWORD_HASH`.
 4. Set the database URL in the current PowerShell session, then apply the schema:
 
    ```powershell
@@ -30,11 +27,13 @@ This directory contains the API and its infrastructure integration. Worker imple
 
    If you changed `POSTGRES_PORT`, use that port in `DATABASE_URL`.
 
-5. Create an account after applying the schema and set its UUID as `INGESTION_ACCOUNT_ID`:
+5. Create an account and database-backed admin user after applying the schema:
 
    ```powershell
    $env:INGESTION_ACCOUNT_ID = psql $env:DATABASE_URL -tAc "INSERT INTO accounts (name) VALUES ('local') RETURNING id" | Select-Object -First 1
    $env:INGESTION_ACCOUNT_ID = $env:INGESTION_ACCOUNT_ID.Trim()
+   $hash = node -e "require('bcryptjs').hash(process.argv[1], 12).then(console.log)" "your-password"
+   psql $env:DATABASE_URL -c "INSERT INTO admin_users (account_id, email, password_hash) VALUES ('$env:INGESTION_ACCOUNT_ID', 'admin@example.com', '$hash')"
    ```
 6. Run the API:
 
@@ -44,7 +43,14 @@ This directory contains the API and its infrastructure integration. Worker imple
 
 Health: `GET http://localhost:3000/health`.
 
-Ingestion requests use `x-api-key` and are sent to `POST /api/v1/identify` or `POST /api/v1/track`. Both return `202 Accepted` only after profile/event persistence and `process-event` queue publication.
+Admin login is `POST /admin/login` with `{ "email": "...", "password": "..." }`.
+Use the returned bearer token for `/admin/auth/api-keys`, `/admin/templates`,
+`/admin/audiences`, `/admin/workflows`, and `/admin/activity`.
+
+Ingestion requests use an active account API key in `x-api-key` and are sent to
+`POST /api/v1/identify` or `POST /api/v1/track`. Create keys through
+`POST /admin/auth/api-keys`. Both return `202 Accepted` only after profile/event
+persistence and `process-event` queue publication.
 
 Example identify request:
 

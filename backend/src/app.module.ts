@@ -4,8 +4,16 @@ import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AdminAuthController } from './auth/admin-auth.controller';
+import { AdminAuthService } from './auth/admin-auth.service';
 import { AdminAuthGuard } from './auth/admin-auth.guard';
-import { AdminApiController } from './admin/admin-api.controller';
+import { TemplateController } from './admin/template.controller';
+import { TemplateService } from './admin/template.service';
+import { AudienceController } from './admin/audience.controller';
+import { AudienceService } from './admin/audience.service';
+import { WorkflowController } from './admin/workflow.controller';
+import { WorkflowService } from './admin/workflow.service';
+import { ActivityController } from './admin/activity.controller';
+import { ActivityService } from './admin/activity.service';
 import { HealthController } from './health/health.controller';
 import { DatabaseService } from './infra/database.service';
 import { QueueService } from './infra/queue.service';
@@ -25,7 +33,10 @@ import { ApiKeyGuard } from './ingestion/api-key.guard';
     HealthController,
     IngestionController,
     AdminAuthController,
-    AdminApiController
+    TemplateController,
+    AudienceController,
+    WorkflowController,
+    ActivityController
   ],
   providers: [
     DatabaseService,
@@ -34,7 +45,12 @@ import { ApiKeyGuard } from './ingestion/api-key.guard';
     OutboxService,
     IngestionService,
     ApiKeyGuard,
+    AdminAuthService,
     AdminAuthGuard,
+    TemplateService,
+    AudienceService,
+    WorkflowService,
+    ActivityService,
     { provide: APP_GUARD, useClass: ThrottlerGuard }
   ]
 })

@@ -14,16 +14,17 @@ export class IngestionService {
     private readonly queue: QueueService
   ) {}
 
-  identify(input: IdentifyDto) {
-    return this.persist(input, 'identify');
+  identify(input: IdentifyDto, accountId?: string) {
+    return this.persist(input, 'identify', accountId);
   }
 
-  track(input: TrackDto) {
-    return this.persist(input, 'track');
+  track(input: TrackDto, accountId?: string) {
+    return this.persist(input, 'track', accountId);
   }
 
-  private async persist(input: IdentifyDto | TrackDto, type: string) {
-    const accountId = this.config.getOrThrow<string>('INGESTION_ACCOUNT_ID');
+  private async persist(input: IdentifyDto | TrackDto, type: string, requestedAccountId?: string) {
+    const accountId =
+      requestedAccountId ?? this.config.getOrThrow<string>('INGESTION_ACCOUNT_ID');
     const key = `idempotency:ingestion:${accountId}:${input.messageId}`;
     if (!(await this.redis.client.set(key, '1', 'EX', 86400, 'NX'))) {
       throw new ConflictException('messageId has already been processed');

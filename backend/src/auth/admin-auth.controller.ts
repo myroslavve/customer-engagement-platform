@@ -1,9 +1,18 @@
-import { Body, Controller, Post, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { Throttle } from '@nestjs/throttler';
-import { compare } from 'bcryptjs';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards
+} from '@nestjs/common';
+import { IsEmail, IsString, Length, MinLength } from 'class-validator';
+import { AdminAuthGuard } from './admin-auth.guard';
+import { AdminAuthService } from './admin-auth.service';
+import { AdminPrincipal } from './admin.types';
 
 class LoginDto {
   @IsEmail()
@@ -14,33 +23,50 @@ class LoginDto {
   password!: string;
 }
 
-@Controller('admin/auth')
-export class AdminAuthController {
-  private readonly dummyPasswordHash =
-    '$2b$12$ijldV01X2TgdaCJG210K0ucLkKYEiYe5b8jG/ihCG44dw52b8TvFy';
+class CreateApiKeyDto {
+  @IsString()
+  @Length(1, 100)
+  name!: string;
+}
 
-  constructor(
-    private readonly config: ConfigService,
-    private readonly jwt: JwtService
-  ) {}
+type AdminRequest = Request & { user?: AdminPrincipal };
+
+@Controller('admin')
+export class AdminAuthController {
+  constructor(private readonly adminAuthService: AdminAuthService) {}
 
   @Post('login')
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async login(@Body() input: LoginDto): Promise<{ accessToken: string }> {
-    const configuredEmail = this.config.getOrThrow<string>('ADMIN_EMAIL');
-    const configuredHash = this.config.getOrThrow<string>('ADMIN_PASSWORD_HASH');
-    const passwordMatches = await compare(
-      input.password,
-      input.email === configuredEmail ? configuredHash : this.dummyPasswordHash
-    );
-    if (input.email !== configuredEmail || !passwordMatches) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-    return {
-      accessToken: this.jwt.sign(
-        { sub: input.email, role: 'admin' },
-        { secret: this.config.getOrThrow<string>('JWT_SECRET'), expiresIn: '8h' }
-      )
-    };
+  login(@Body() input: LoginDto) {
+    return this.adminAuthService.login(input);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('auth/me')
+  me(@Req() request: AdminRequest) {
+    if (!request.user) throw new UnauthorizedException('Missing admin principal');
+    return request.user;
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('auth/api-keys')
+  createApiKey(@Req() request: AdminRequest, @Body() input: CreateApiKeyDto) {
+    return this.adminAuthService.createApiKey(this.accountId(request), input.name);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('auth/api-keys')
+  listApiKeys(@Req() request: AdminRequest) {
+    return this.adminAuthService.listApiKeys(this.accountId(request));
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Delete('auth/api-keys/:id')
+  revokeApiKey(@Req() request: AdminRequest, @Param('id') id: string) {
+    return this.adminAuthService.revokeApiKey(this.accountId(request), id);
+  }
+
+  private accountId(request: AdminRequest): string {
+    if (!request.user?.accountId) throw new UnauthorizedException('Missing account context');
+    return request.user.accountId;
   }
 }
