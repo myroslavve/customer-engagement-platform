@@ -9,8 +9,10 @@ import { DatabaseConfig } from '../config/db.config';
 import { Account } from './entities/account.entity';
 import { AdminDatabaseService } from '../admin/admin-database.service';
 import { EventOutbox } from './entities/event-outbox.entity';
+import { Message } from './entities/message.entity';
 import { Profile } from './entities/profile.entity';
 import { RunStep } from './entities/run-step.entity';
+import { Template } from './entities/template.entity';
 import { UserEvent } from './entities/user-event.entity';
 import { WorkflowRun } from './entities/workflow-run.entity';
 import { WorkflowVersion } from './entities/workflow-version.entity';
@@ -25,6 +27,8 @@ export const ENTITIES = [
   WorkflowVersion,
   WorkflowRun,
   RunStep,
+  Template,
+  Message,
 ];
 
 /** Shared by the application (TypeOrmModule) and the TypeORM CLI (data-source.ts). */
