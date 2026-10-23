@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { IsString, Length } from 'class-validator';
 import { AdminAuthGuard } from '../auth/admin-auth.guard';
 import { requireAccountId, AdminRequest } from './admin-request';
@@ -34,12 +45,16 @@ export class TemplateController {
   }
 
   @Patch(':id')
-  update(@Req() request: AdminRequest, @Param('id') id: string, @Body() input: TemplateDto) {
+  update(
+    @Req() request: AdminRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() input: TemplateDto,
+  ) {
     return this.templateService.update(requireAccountId(request), id, input);
   }
 
   @Delete(':id')
-  delete(@Req() request: AdminRequest, @Param('id') id: string) {
+  delete(@Req() request: AdminRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.templateService.delete(requireAccountId(request), id);
   }
 }

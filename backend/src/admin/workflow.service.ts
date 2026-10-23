@@ -1,7 +1,22 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AdminDatabaseService } from './admin-database.service';
 import { NodeType } from '../enums/node-type.enum';
+import { RuleValidationOptions, validateRule } from '../workflows/condition-validation';
 import { WorkflowDefinition, WorkflowInput, WorkflowNode, WorkflowStatus } from './workflow.types';
+
+/**
+ * Workflow conditions are evaluated against the run context (profile + event), so unlike audience
+ * rules they have no bare-name shorthand and no `traits` alias: `traits.plan` would silently
+ * evaluate to nothing, and `profile.traits.plan` is the path that works.
+ */
+const WORKFLOW_RULE_OPTIONS: RuleValidationOptions = {
+  ruleLabel: 'Workflow condition',
+  fieldLabel: 'workflow condition field',
+  roots: new Set(['profile', 'event']),
+  allowShorthand: false,
+};
+
+type ReferencedRules = { audienceRule: Record<string, unknown> | null };
 
 @Injectable()
 export class WorkflowService {
@@ -73,10 +88,16 @@ export class WorkflowService {
     ) {
       throw new BadRequestException('Send email nodes require templateId');
     }
+    if (node.type === NodeType.Branch) validateRule(node.condition, WORKFLOW_RULE_OPTIONS);
+    if (node.type === NodeType.WaitForEvent && node.filter !== undefined) {
+      validateRule(node.filter, WORKFLOW_RULE_OPTIONS);
+    }
   }
 
   async create(accountId: string, input: WorkflowInput) {
     this.validate(input.definition);
+    const { audienceRule } = await this.validateReferences(accountId, input.definition);
+    const definition = this.withAudienceRule(input.definition, audienceRule);
     return this.database.transaction(async (client) => {
       const workflow = (await client.query(
         `INSERT INTO workflows (account_id, name)
@@ -88,7 +109,7 @@ export class WorkflowService {
            (workflow_id, version, trigger_event_name, definition)
          VALUES ($1, 1, $2, $3)
          RETURNING id, version, trigger_event_name, definition, created_at`,
-        [workflow[0].id, input.definition.trigger.eventName, JSON.stringify(input.definition)],
+        [workflow[0].id, definition.trigger.eventName, JSON.stringify(definition)],
       )) as Array<Record<string, unknown>>;
       return {
         id: workflow[0].id,
@@ -99,7 +120,15 @@ export class WorkflowService {
     });
   }
 
+  /**
+   * Publishes the latest stored version. The definition is re-validated and its references re-checked
+   * here, so a draft saved before its template or audience was deleted cannot go live (US-11).
+   */
   async publish(accountId: string, id: string) {
+    const definition = await this.latestDefinition(accountId, id);
+    if (!definition) throw new NotFoundException('Workflow not found');
+    this.validate(definition);
+    await this.validateReferences(accountId, definition);
     return this.setStatus(accountId, id, WorkflowStatus.Active, true);
   }
 
@@ -118,6 +147,9 @@ export class WorkflowService {
       !Array.isArray(definition.nodes)
     ) {
       throw new BadRequestException('Workflow requires trigger, entryNodeId, and nodes');
+    }
+    if (definition.trigger.filter !== undefined) {
+      validateRule(definition.trigger.filter, WORKFLOW_RULE_OPTIONS);
     }
     const nodes = new Map<string, WorkflowNode>();
     for (const node of definition.nodes) {
@@ -149,6 +181,85 @@ export class WorkflowService {
     };
     visit(definition.entryNodeId);
     return true;
+  }
+
+  /**
+   * Resolves the templates and the audience a definition references against the account's rows, and
+   * returns the audience rule so the caller can snapshot it into the trigger filter.
+   */
+  async validateReferences(
+    accountId: string,
+    definition: WorkflowDefinition,
+  ): Promise<ReferencedRules> {
+    const missing: string[] = [];
+
+    const templateIds = new Set<string>();
+    for (const node of definition.nodes) {
+      if (node.type === NodeType.SendEmail && node.templateId) templateIds.add(node.templateId);
+    }
+    if (templateIds.size > 0) {
+      const result = await this.database.query<{ id: string }>(
+        `SELECT id::text AS id FROM templates
+         WHERE account_id = $1 AND id::text = ANY($2)`,
+        [accountId, [...templateIds]],
+      );
+      const found = new Set(result.rows.map((row) => row.id));
+      for (const templateId of templateIds) {
+        if (!found.has(templateId)) missing.push(`template ${templateId}`);
+      }
+    }
+
+    let audienceRule: Record<string, unknown> | null = null;
+    const audienceId = definition.trigger.audienceId;
+    if (audienceId) {
+      const result = await this.database.query<{ rule: Record<string, unknown> }>(
+        `SELECT rule FROM audiences WHERE account_id = $1 AND id::text = $2`,
+        [accountId, audienceId],
+      );
+      if (!result.rows[0]) missing.push(`audience ${audienceId}`);
+      else audienceRule = result.rows[0].rule;
+    }
+
+    if (missing.length > 0) {
+      throw new BadRequestException(`Workflow references missing ${missing.join(', ')}`);
+    }
+    return { audienceRule };
+  }
+
+  /**
+   * Snapshots the referenced audience's rule into trigger.filter so the trigger engine, which knows
+   * nothing about audiences, evaluates it as part of the entry filter. The version keeps audienceId
+   * for traceability, but editing the audience later does not change a stored version.
+   */
+  private withAudienceRule(
+    definition: WorkflowDefinition,
+    audienceRule: Record<string, unknown> | null,
+  ): WorkflowDefinition {
+    if (!definition.trigger.audienceId || !audienceRule) return definition;
+    const filter = definition.trigger.filter;
+    return {
+      ...definition,
+      trigger: {
+        ...definition.trigger,
+        filter: filter ? { all: [audienceRule, filter] } : audienceRule,
+      },
+    };
+  }
+
+  /** The definition publish() would put live: the newest version of the workflow. */
+  private async latestDefinition(
+    accountId: string,
+    id: string,
+  ): Promise<WorkflowDefinition | null> {
+    const result = await this.database.query<{ definition: WorkflowDefinition }>(
+      `SELECT v.definition
+       FROM workflow_versions v
+       JOIN workflows w ON w.id = v.workflow_id
+       WHERE w.id = $1 AND w.account_id = $2
+       ORDER BY v.version DESC LIMIT 1`,
+      [id, accountId],
+    );
+    return result.rows[0]?.definition ?? null;
   }
 
   private targets(node: WorkflowNode): Array<string | null | undefined> {

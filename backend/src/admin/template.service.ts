@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AdminDatabaseService } from './admin-database.service';
 import { isUniqueViolation } from '../database/is-unique-violation';
+import { validateTemplateVariables } from './template-validation';
 
 type TemplateInput = { name: string; subject: string; body: string };
 
@@ -18,6 +19,7 @@ export class TemplateService {
   }
 
   async create(accountId: string, input: TemplateInput) {
+    validateTemplateVariables(input.subject, input.body);
     try {
       const result = await this.database.query(
         `INSERT INTO templates (account_id, name, subject, body)
@@ -35,6 +37,7 @@ export class TemplateService {
   }
 
   async update(accountId: string, id: string, input: TemplateInput) {
+    validateTemplateVariables(input.subject, input.body);
     const result = await this.database.query(
       `UPDATE templates
        SET name = $3, subject = $4, body = $5, updated_at = NOW()

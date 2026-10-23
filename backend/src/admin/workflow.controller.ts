@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
 import { IsObject, IsString, Length } from 'class-validator';
 import { AdminAuthGuard } from '../auth/admin-auth.guard';
 import { AdminRequest, requireAccountId } from './admin-request';
@@ -30,23 +30,28 @@ export class WorkflowController {
   }
 
   @Post(':id/publish')
-  publish(@Req() request: AdminRequest, @Param('id') id: string) {
+  publish(@Req() request: AdminRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.workflowService.publish(requireAccountId(request), id);
   }
 
   @Post(':id/pause')
-  pause(@Req() request: AdminRequest, @Param('id') id: string) {
+  pause(@Req() request: AdminRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.workflowService.pause(requireAccountId(request), id);
   }
 
   @Post(':id/resume')
-  resume(@Req() request: AdminRequest, @Param('id') id: string) {
+  resume(@Req() request: AdminRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.workflowService.resume(requireAccountId(request), id);
   }
 
+  /** Structure plus references, so a definition is checked the same way create and publish check it. */
   @Post('validate')
-  validate(@Body() input: Pick<WorkflowDto, 'definition'>) {
+  async validate(
+    @Req() request: AdminRequest,
+    @Body() input: Pick<WorkflowDto, 'definition'>,
+  ): Promise<{ valid: true }> {
     this.workflowService.validate(input.definition);
+    await this.workflowService.validateReferences(requireAccountId(request), input.definition);
     return { valid: true };
   }
 }
