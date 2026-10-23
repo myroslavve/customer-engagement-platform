@@ -97,7 +97,7 @@ Message statuses: `queued` → `sending` → `sent` | `failed`, or `skipped`. Re
 `template_not_found` (the template was deleted after the message was queued), `send_interrupted` (an
 earlier attempt reached the provider but its outcome is unknown; the email is not resent, so it is
 delivered at most once), or the provider's error after the last retry. A `send_email` node whose
-template does not exist fails its run.
+template is not one of the account's templates fails its run.
 
 ## Scripts
 

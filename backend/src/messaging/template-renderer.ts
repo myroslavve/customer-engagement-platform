@@ -33,17 +33,17 @@ export class TemplateRenderer {
 
   private substitute(text: string, variables: RunContext, escapeHtml: boolean): string {
     return text.replace(PLACEHOLDER, (_match, path: string) => {
-      const value = stringify(resolvePath(variables, path));
+      const value = this.stringify(resolvePath(variables, path));
       return escapeHtml ? value.replace(HTML_SPECIAL_CHARS, (char) => HTML_ESCAPES[char]) : value;
     });
   }
-}
 
-/** Primitives render as text; missing, null, objects and arrays render as nothing. */
-function stringify(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return String(value);
+  /** Primitives render as text; missing, null, objects and arrays render as nothing. */
+  private stringify(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+      return String(value);
+    }
+    return '';
   }
-  return '';
 }

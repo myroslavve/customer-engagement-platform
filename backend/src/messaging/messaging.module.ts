@@ -18,15 +18,6 @@ import { SendEmailStepExecutor } from './send-email-step.executor';
 import { TemplateRenderer } from './template-renderer';
 import { TemplateRepository } from './template.repository';
 
-/** Config validation guarantees resendApiKey when the provider is resend. */
-function createEmailProvider(configService: ConfigService<AppConfig, true>): EmailProvider {
-  const { provider, resendApiKey, fromAddress } = configService.get('email', { infer: true });
-  if (provider === EmailProviderKind.Resend && resendApiKey) {
-    return new ResendEmailProvider(resendApiKey, fromAddress);
-  }
-  return new LogEmailProvider();
-}
-
 @Module({
   imports: [
     TypeOrmModule.forFeature([Template, Message]),
@@ -35,7 +26,16 @@ function createEmailProvider(configService: ConfigService<AppConfig, true>): Ema
     WorkflowExecutionModule,
   ],
   providers: [
-    { provide: EMAIL_PROVIDER, inject: [ConfigService], useFactory: createEmailProvider },
+    {
+      provide: EMAIL_PROVIDER,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService<AppConfig, true>): EmailProvider => {
+        const { provider, resendApiKey, fromAddress } = configService.get('email', { infer: true });
+        if (provider !== EmailProviderKind.Resend) return new LogEmailProvider();
+        if (!resendApiKey) throw new Error('RESEND_API_KEY is required when EMAIL_PROVIDER=resend');
+        return new ResendEmailProvider(resendApiKey, fromAddress);
+      },
+    },
     TemplateRepository,
     MessageRepository,
     TemplateRenderer,

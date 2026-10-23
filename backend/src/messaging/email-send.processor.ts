@@ -34,7 +34,6 @@ export class EmailSendProcessor extends WorkerHost implements OnApplicationBoots
       message: 'Consuming queue',
       queue: QUEUE_EMAIL_SEND,
       concurrency: this.worker.concurrency,
-      rateLimit: EMAIL_SEND_RATE_LIMIT,
     });
   }
 
@@ -43,45 +42,18 @@ export class EmailSendProcessor extends WorkerHost implements OnApplicationBoots
     try {
       await this.emailService.send(job.data.messageId, job.attemptsStarted);
     } catch (error) {
-      const final = isFinalAttempt(job, error);
-      this.logAttemptFailed(job, error, final);
-      if (final) await this.failMessage(job, error);
+      if (isFinalAttempt(job, error)) await this.failMessage(job, error);
       throw error;
     }
   }
 
+  /** Logs before marking, so the original error is kept even if marking fails. */
   private async failMessage(job: Job<EmailSendJob, void, string>, error: unknown): Promise<void> {
-    await this.messageRepository.markFailed(
-      job.data.messageId,
-      errorMessage(error),
-      job.attemptsStarted,
-    );
-  }
-
-  /** Retried attempts log at warn; only the last one (or an unrecoverable error) at error. */
-  private logAttemptFailed(
-    job: Job<EmailSendJob, void, string>,
-    error: unknown,
-    final: boolean,
-  ): void {
-    const details = {
-      jobId: job.id,
-      messageId: job.data.messageId,
-      attempt: job.attemptsStarted,
-      maxAttempts: job.opts.attempts ?? 1,
-      error: errorMessage(error),
-    };
-    if (!final) {
-      this.logger.warn({ ...details, message: 'send-email attempt failed, will retry' });
-      return;
-    }
+    const message = error instanceof Error ? error.message : String(error);
     this.logger.error(
-      { ...details, message: 'send-email failed' },
+      { message: 'send-email failed', messageId: job.data.messageId, error: message },
       error instanceof Error ? error.stack : undefined,
     );
+    await this.messageRepository.markFailed(job.data.messageId, message, job.attemptsStarted);
   }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

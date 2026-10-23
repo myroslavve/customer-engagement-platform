@@ -134,13 +134,13 @@ package "shared" {
     +createIfAbsent(message: object, tx?): Promise<{ message, created }>
     +claimForSending(id: string, tx?): Promise<boolean>
     +releaseSending(id: string, tx?): Promise<void>
-    +markSent(id: string, providerMessageId: string, subject: string, attempts: number, tx?): Promise<void>
+    +markSent(id: string, providerMessageId: string | null, subject: string, attempts: number, tx?): Promise<void>
     +markFailed(id: string, error: string, attempts: number, tx?): Promise<void>
     +markSkipped(id: string, reason: string, attempts: number, tx?): Promise<void>
     +findByRunId(runId: string, tx?): Promise<Message[]>
   }
   class TemplateRepository {
-    +findById(id: string, tx?): Promise<Template | null>
+    +findForAccount(id: string, accountId: string, tx?): Promise<Template | null>
   }
 }
 
@@ -187,6 +187,7 @@ StepExecutor <|.. WaitForEventStepExecutor
 StepExecutor <|.. SendEmailStepExecutor
 StepExecutor <|.. ExitStepExecutor
 BranchStepExecutor --> ConditionEvaluator
+SendEmailStepExecutor --> TemplateRepository : template of the account exists?
 SendEmailStepExecutor --> MessageRepository : create message (idempotent per run+node)
 SendEmailStepExecutor --> QueueProducer : email job
 
