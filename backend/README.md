@@ -88,10 +88,9 @@ run moves on at once. The `email-send` worker renders the template's `{{path}}` 
 it, rate-limited to 2 sends/second (Resend's limit); `EMAIL_QUEUE_CONCURRENCY` (default 2) sets the
 worker concurrency.
 
-- `EMAIL_PROVIDER=log` (default) prints recipient and subject to the log instead of sending.
-- `EMAIL_PROVIDER=resend` sends through Resend and requires `RESEND_API_KEY`. Until a domain is
-  verified, keep `EMAIL_FROM=onboarding@resend.dev` and send only to the Resend account owner's address.
-  The Resend SDK prints its own `console.error` for every API error unless `NODE_ENV=production`.
+Emails go through Resend; `RESEND_API_KEY` is required (a free account works locally). Until a domain
+is verified, keep `EMAIL_FROM=onboarding@resend.dev` and send only to the Resend account owner's
+address. The Resend SDK prints its own `console.error` for every API error unless `NODE_ENV=production`.
 
 Message statuses: `queued` → `sending` → `sent` | `failed`, or `skipped`. Reasons in `messages.error`:
 `no_email` / `unsubscribed` (skipped: the profile has no address or `profiles.unsubscribed_at` is set),

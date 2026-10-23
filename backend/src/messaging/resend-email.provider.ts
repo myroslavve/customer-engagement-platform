@@ -1,4 +1,7 @@
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { AppConfig } from '../config/configuration';
 import { RenderedEmail } from '../types/rendered-email.types';
 import { SendResult } from '../types/send-result.types';
 import { EmailProvider } from './email-provider';
@@ -7,14 +10,15 @@ import { EmailSendError } from './email-send.error';
 /** Bounds how long a `sending` claim stays active; EmailService's CLAIM_TIMEOUT_MS must exceed it. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
+@Injectable()
 export class ResendEmailProvider implements EmailProvider {
   private readonly resend: Resend;
+  private readonly fromAddress: string;
 
-  constructor(
-    apiKey: string,
-    private readonly fromAddress: string,
-  ) {
-    this.resend = new Resend(apiKey);
+  constructor(configService: ConfigService<AppConfig, true>) {
+    const { resendApiKey, fromAddress } = configService.get('email', { infer: true });
+    this.resend = new Resend(resendApiKey);
+    this.fromAddress = fromAddress;
   }
 
   /** The SDK reports a timeout like a network failure (application_error, no status): outcome unknown. */

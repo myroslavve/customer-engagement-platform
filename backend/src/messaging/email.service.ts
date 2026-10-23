@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { UnrecoverableError } from 'bullmq';
 import { Message } from '../database/entities/message.entity';
 import { Template } from '../database/entities/template.entity';
@@ -27,6 +27,8 @@ const CLAIM_TIMEOUT_MS = 60_000;
  */
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
+
   constructor(
     private readonly messageRepository: MessageRepository,
     private readonly templateRepository: TemplateRepository,
@@ -65,6 +67,11 @@ export class EmailService {
       rendered.subject,
       attempt,
     );
+    this.logger.log({
+      message: 'Email sent',
+      messageId: message.id,
+      providerMessageId: result.providerMessageId,
+    });
   }
 
   /**

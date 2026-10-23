@@ -77,7 +77,6 @@ package "messaging" {
     +send(email: RenderedEmail): Promise<SendResult>
   }
   class ResendEmailProvider
-  class LogEmailProvider
 }
 
 note right of EmailService
@@ -202,7 +201,6 @@ EmailService --> TemplateRenderer
 EmailService --> EmailProvider
 EmailService --> MessageRepository : claim / sent / failed / skipped
 EmailProvider <|.. ResendEmailProvider
-EmailProvider <|.. LogEmailProvider
 ResendEmailProvider --> EmailDeliveryProvider : HTTPS API
 
 ' ---- infrastructure ----
