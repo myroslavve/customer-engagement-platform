@@ -4,12 +4,14 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { IsEmail, IsString, Length, MinLength } from 'class-validator';
+import { Throttle } from '@nestjs/throttler';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminPrincipal } from './admin.types';
@@ -36,6 +38,7 @@ export class AdminAuthController {
   constructor(private readonly adminAuthService: AdminAuthService) {}
 
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   login(@Body() input: LoginDto) {
     return this.adminAuthService.login(input);
   }
@@ -61,7 +64,7 @@ export class AdminAuthController {
 
   @UseGuards(AdminAuthGuard)
   @Delete('auth/api-keys/:id')
-  revokeApiKey(@Req() request: AdminRequest, @Param('id') id: string) {
+  revokeApiKey(@Req() request: AdminRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.adminAuthService.revokeApiKey(this.accountId(request), id);
   }
 

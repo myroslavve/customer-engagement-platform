@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
-import { IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsISO8601, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AdminAuthGuard } from '../auth/admin-auth.guard';
 import { AdminRequest, requireAccountId } from './admin-request';
@@ -8,6 +8,7 @@ import { ActivityService } from './activity.service';
 class ActivityQueryDto {
   @IsOptional()
   @IsString()
+  @IsUUID()
   profileId?: string;
 
   @IsOptional()
@@ -15,15 +16,16 @@ class ActivityQueryDto {
   eventName?: string;
 
   @IsOptional()
-  @IsString()
+  @IsISO8601()
   from?: string;
 
   @IsOptional()
-  @IsString()
+  @IsISO8601()
   to?: string;
 
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
   @Min(1)
   @Max(500)
   limit = 100;

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AdminDatabaseService } from './admin-database.service';
+import { NodeType } from '../enums/node-type.enum';
 import { WorkflowDefinition, WorkflowInput, WorkflowNode, WorkflowStatus } from './workflow.types';
 
 @Injectable()
@@ -11,11 +12,67 @@ export class WorkflowService {
       `SELECT w.id, w.name, w.status, w.published_version_id, w.created_at, w.updated_at,
               v.version, v.definition
        FROM workflows w
-       LEFT JOIN workflow_versions v ON v.id = w.published_version_id
+       LEFT JOIN LATERAL (
+         SELECT version, definition
+         FROM workflow_versions
+         WHERE workflow_id = w.id
+         ORDER BY CASE WHEN id = w.published_version_id THEN 0 ELSE 1 END, version DESC
+         LIMIT 1
+       ) v ON true
        WHERE w.account_id = $1 ORDER BY w.updated_at DESC`,
       [accountId],
     );
     return result.rows;
+  }
+
+  private validateNode(node: WorkflowNode): void {
+    if (!node || typeof node !== 'object' || typeof node.id !== 'string' || !node.id) {
+      throw new BadRequestException('Workflow nodes require a non-empty id');
+    }
+    if (!Object.values(NodeType).includes(node.type as NodeType)) {
+      throw new BadRequestException(`Unsupported workflow node type: ${String(node.type)}`);
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(node.id)) {
+      throw new BadRequestException('Workflow node IDs must contain only letters, numbers, _ or -');
+    }
+    const hasLink = (value: unknown): value is string | null =>
+      value === null || typeof value === 'string';
+    if (
+      node.type === NodeType.Branch &&
+      (!node.condition ||
+        typeof node.condition !== 'object' ||
+        !hasLink(node.next) ||
+        !hasLink(node.elseNext))
+    ) {
+      throw new BadRequestException('Branch nodes require condition, next, and elseNext');
+    }
+    if (
+      node.type === NodeType.Delay &&
+      (typeof node.durationMs !== 'number' ||
+        !Number.isFinite(node.durationMs) ||
+        node.durationMs < 0 ||
+        !hasLink(node.next))
+    ) {
+      throw new BadRequestException('Delay nodes require a non-negative durationMs');
+    }
+    if (
+      node.type === NodeType.WaitForEvent &&
+      (typeof node.eventName !== 'string' ||
+        !node.eventName ||
+        typeof node.timeoutMs !== 'number' ||
+        !Number.isFinite(node.timeoutMs) ||
+        node.timeoutMs < 0 ||
+        !hasLink(node.next) ||
+        !hasLink(node.timeoutNext))
+    ) {
+      throw new BadRequestException('Wait nodes require eventName and a non-negative timeoutMs');
+    }
+    if (
+      node.type === NodeType.SendEmail &&
+      (typeof node.templateId !== 'string' || !node.templateId || !hasLink(node.next))
+    ) {
+      throw new BadRequestException('Send email nodes require templateId');
+    }
   }
 
   async create(accountId: string, input: WorkflowInput) {
@@ -47,11 +104,11 @@ export class WorkflowService {
   }
 
   async pause(accountId: string, id: string) {
-    return this.setStatus(accountId, id, WorkflowStatus.Paused, false);
+    return this.setStatus(accountId, id, WorkflowStatus.Paused, false, WorkflowStatus.Active);
   }
 
   async resume(accountId: string, id: string) {
-    return this.setStatus(accountId, id, WorkflowStatus.Active, false);
+    return this.setStatus(accountId, id, WorkflowStatus.Active, false, WorkflowStatus.Paused);
   }
 
   validate(definition: WorkflowDefinition): true {
@@ -64,8 +121,8 @@ export class WorkflowService {
     }
     const nodes = new Map<string, WorkflowNode>();
     for (const node of definition.nodes) {
-      if (!node.id || nodes.has(node.id))
-        throw new BadRequestException('Workflow node IDs must be unique');
+      this.validateNode(node);
+      if (nodes.has(node.id)) throw new BadRequestException('Workflow node IDs must be unique');
       nodes.set(node.id, node);
     }
     if (!nodes.has(definition.entryNodeId)) {
@@ -103,6 +160,7 @@ export class WorkflowService {
     id: string,
     status: WorkflowStatus,
     publishVersion: boolean,
+    expectedStatus?: WorkflowStatus,
   ) {
     const result = await this.database.query(
       `UPDATE workflows w
@@ -112,8 +170,10 @@ export class WorkflowService {
              ELSE w.published_version_id END,
            updated_at = NOW()
        WHERE w.id = $1 AND w.account_id = $2
+         AND ($5::workflow_status IS NULL OR w.status = $5::workflow_status)
+         AND ($3 <> 'active' OR $4 OR w.published_version_id IS NOT NULL)
        RETURNING id, name, status, published_version_id, updated_at`,
-      [id, accountId, status, publishVersion],
+      [id, accountId, status, publishVersion, expectedStatus ?? null],
     );
     if (!result.rows[0]) throw new NotFoundException('Workflow not found');
     return result.rows[0];

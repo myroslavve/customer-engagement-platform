@@ -8,6 +8,18 @@ export type AudienceRule =
   | { field: string; op: string; value?: unknown };
 
 type AudienceInput = { name: string; rule: AudienceRule };
+const SUPPORTED_OPERATORS = new Set([
+  'eq',
+  'neq',
+  'exists',
+  'in',
+  'nin',
+  'contains',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+]);
 
 function valueAt(profile: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((value, key) => {
@@ -108,6 +120,9 @@ export class AudienceService {
     }
     if (typeof rule.field !== 'string' || !rule.field || typeof rule.op !== 'string') {
       throw new BadRequestException('Audience leaf rules require field and operator');
+    }
+    if (!SUPPORTED_OPERATORS.has(rule.op)) {
+      throw new BadRequestException(`Unsupported audience operator: ${rule.op}`);
     }
   }
 }

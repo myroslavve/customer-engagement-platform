@@ -34,4 +34,21 @@ describe('WorkflowService', () => {
       }),
     ).toThrow(BadRequestException);
   });
+
+  it('rejects malformed and unsupported nodes', () => {
+    expect(() =>
+      service.validate({
+        trigger: { eventName: 'signed_up' },
+        entryNodeId: 'unknown',
+        nodes: [{ id: 'bad id', type: 'unsupported' } as never],
+      }),
+    ).toThrow('Unsupported workflow node type');
+    expect(() =>
+      service.validate({
+        trigger: { eventName: 'signed_up' },
+        entryNodeId: 'delay',
+        nodes: [{ id: 'delay', type: 'delay' }],
+      }),
+    ).toThrow('Delay nodes require');
+  });
 });

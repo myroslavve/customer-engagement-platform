@@ -15,13 +15,15 @@ export class AdminDatabaseService {
   async transaction<T>(callback: (queryRunner: QueryRunner) => Promise<T>): Promise<T> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
-    await queryRunner.startTransaction();
+    let transactionStarted = false;
     try {
+      await queryRunner.startTransaction();
+      transactionStarted = true;
       const result = await callback(queryRunner);
       await queryRunner.commitTransaction();
       return result;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (transactionStarted) await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();

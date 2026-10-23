@@ -42,4 +42,14 @@ describe('AudienceService', () => {
 
     await expect(service.preview('account-1', { any: [] })).rejects.toThrow(BadRequestException);
   });
+
+  it('rejects unsupported operators before querying profiles', async () => {
+    const database = { query: vi.fn() };
+    const service = new AudienceService(database as never);
+
+    await expect(service.preview('account-1', { field: 'email', op: 'bogus' })).rejects.toThrow(
+      'Unsupported audience operator',
+    );
+    expect(database.query).not.toHaveBeenCalled();
+  });
 });

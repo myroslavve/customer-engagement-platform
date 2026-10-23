@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import { IngestionResult } from '../types/ingestion-result.types';
 import { ApiKeyGuard } from './api-key.guard';
 import { IdentifyDto, TrackDto } from './ingestion.dto';
@@ -11,13 +11,16 @@ export class IngestionController {
 
   @Post('identify')
   @HttpCode(HttpStatus.ACCEPTED)
-  identify(@Body() input: IdentifyDto): Promise<IngestionResult> {
-    return this.ingestionService.identify(input);
+  identify(
+    @Req() request: { accountId?: string },
+    @Body() input: IdentifyDto,
+  ): Promise<IngestionResult> {
+    return this.ingestionService.identify(input, request.accountId);
   }
 
   @Post('track')
   @HttpCode(HttpStatus.ACCEPTED)
-  track(@Body() input: TrackDto): Promise<IngestionResult> {
-    return this.ingestionService.track(input);
+  track(@Req() request: { accountId?: string }, @Body() input: TrackDto): Promise<IngestionResult> {
+    return this.ingestionService.track(input, request.accountId);
   }
 }
