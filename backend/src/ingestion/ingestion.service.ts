@@ -30,22 +30,30 @@ export class IngestionService {
     private readonly queueProducer: QueueProducer,
   ) {}
 
-  identify(input: IdentifyDto): Promise<IngestionResult> {
-    return this.ingest(input, {
-      email: input.email ?? null,
-      traits: input.traits ?? {},
-      eventName: IDENTIFY_EVENT_NAME,
-      properties: input.traits ?? {},
-    });
+  identify(input: IdentifyDto, accountId?: string): Promise<IngestionResult> {
+    return this.ingest(
+      input,
+      {
+        email: input.email ?? null,
+        traits: input.traits ?? {},
+        eventName: IDENTIFY_EVENT_NAME,
+        properties: input.traits ?? {},
+      },
+      accountId,
+    );
   }
 
-  track(input: TrackDto): Promise<IngestionResult> {
-    return this.ingest(input, {
-      email: null,
-      traits: {},
-      eventName: input.eventName,
-      properties: input.properties ?? {},
-    });
+  track(input: TrackDto, accountId?: string): Promise<IngestionResult> {
+    return this.ingest(
+      input,
+      {
+        email: null,
+        traits: {},
+        eventName: input.eventName,
+        properties: input.properties ?? {},
+      },
+      accountId,
+    );
   }
 
   private async ingest(
@@ -56,8 +64,10 @@ export class IngestionService {
       eventName: string;
       properties: Record<string, unknown>;
     },
+    requestedAccountId?: string,
   ): Promise<IngestionResult> {
-    const { accountId } = this.configService.get('ingestion', { infer: true });
+    const accountId =
+      requestedAccountId ?? this.configService.get('ingestion', { infer: true }).accountId;
     if (!(await this.idempotencyService.claim(accountId, input.messageId))) {
       throw new ConflictException('messageId has already been processed');
     }

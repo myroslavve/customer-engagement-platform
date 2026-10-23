@@ -4,6 +4,7 @@
   "description": "",
   "scripts": {
     "test": "vitest run --passWithNoTests",
+    "test:integration": "vitest run src/admin/admin-database.integration.spec.ts --passWithNoTests",
     "build": "nest build",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -62,7 +63,6 @@
     "@eslint/js": "^9.39.5",
     "@nestjs/cli": "^11.0.24",
     "@nestjs/schematics": "^11.1.0",
-    "@swc/core": "^1.16.20",
     "@types/node": "^22.20.5",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^9.1.2",
@@ -70,7 +70,6 @@
     "ts-node": "^10.9.2",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.0",
-    "unplugin-swc": "^2.0.0",
     "vitest": "^5.0.5"
   }
 }

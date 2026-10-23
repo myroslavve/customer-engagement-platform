@@ -7,6 +7,7 @@ import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { AppConfig } from '../config/configuration';
 import { DatabaseConfig } from '../config/db.config';
 import { Account } from './entities/account.entity';
+import { AdminDatabaseService } from '../admin/admin-database.service';
 import { EventOutbox } from './entities/event-outbox.entity';
 import { Profile } from './entities/profile.entity';
 import { UserEvent } from './entities/user-event.entity';
@@ -50,5 +51,7 @@ export function buildDataSourceOptions(config: DatabaseConfig): DataSourceOption
         buildDataSourceOptions(configService.get('database', { infer: true })),
     }),
   ],
+  providers: [AdminDatabaseService],
+  exports: [AdminDatabaseService],
 })
 export class DatabaseModule {}
