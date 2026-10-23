@@ -5,6 +5,7 @@ import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity
 import { AbstractRepository } from '../database/abstract.repository';
 import { WorkflowRun } from '../database/entities/workflow-run.entity';
 import { RunStatus } from '../enums/run-status.enum';
+import { eventClaimSuffix } from '../queues/jobs';
 import { CreateRunInput } from '../types/create-run-input.types';
 import { CreateRunResult } from '../types/create-run-result.types';
 import { Transaction } from '../types/transaction.types';
@@ -44,7 +45,7 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
 
   /**
    * Runs of the profile that this event may resume: waiting for eventName, or already claimed by
-   * this very event on a previous attempt (claim key ends with "__event__<eventId>").
+   * this very event on a previous attempt (claim key ends with eventClaimSuffix(eventId)).
    */
   async findWaiting(
     accountId: string,
@@ -57,7 +58,7 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
       { where: { accountId, profileId, status: In([RunStatus.Waiting, RunStatus.Running]) } },
       transaction,
     );
-    const claimSuffix = `__event__${eventId}`;
+    const claimSuffix = eventClaimSuffix(eventId);
     return liveRuns.filter(
       (run) =>
         (run.status === RunStatus.Waiting && run.waitingForEvent === eventName) ||

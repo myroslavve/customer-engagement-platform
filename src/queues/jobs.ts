@@ -17,13 +17,22 @@ export const JOB_PROCESS_EVENT = 'process-event';
 export const JOB_EXECUTE_STEP = 'execute-step';
 export const JOB_SEND_EMAIL = 'send-email';
 
+const SEPARATOR = '__';
+
 export function processEventJobId(job: ProcessEventJob): string {
   return job.eventId;
 }
 
 export function stepJobId(job: StepJob): string {
-  const base = `${job.runId}__${job.nodeId}__${job.cause}`;
-  return job.cause === StepCause.Event && job.eventId ? `${base}__${job.eventId}` : base;
+  const runNode = job.runId + SEPARATOR + job.nodeId;
+  return job.cause === StepCause.Event && job.eventId
+    ? runNode + eventClaimSuffix(job.eventId)
+    : runNode + SEPARATOR + job.cause;
+}
+
+/** The tail of every step job id (and claim key) produced by resuming a run with this event. */
+export function eventClaimSuffix(eventId: string): string {
+  return SEPARATOR + StepCause.Event + SEPARATOR + eventId;
 }
 
 export function emailSendJobId(job: EmailSendJob): string {
