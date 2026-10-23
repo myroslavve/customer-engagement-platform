@@ -48,24 +48,6 @@ Run from `backend/` unless noted (commands work in bash and PowerShell).
    npm run start:dev
    ```
 
-For an existing database, provision an admin without writing SQL manually:
-
-```bash
-ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD='your-password' npm run admin:provision
-```
-
-PowerShell:
-
-```powershell
-$env:ADMIN_EMAIL = 'admin@example.com'
-$env:ADMIN_PASSWORD = 'your-password'
-npm run admin:provision
-```
-
-The command is idempotent for an existing email. It reuses the earliest account, or creates the
-default account when the database has none. `ADMIN_PASSWORD_HASH` may be used instead of
-`ADMIN_PASSWORD` when a precomputed bcrypt hash is preferred.
-
 Health: `GET http://localhost:3000/health`.
 
 ## HTTP API
