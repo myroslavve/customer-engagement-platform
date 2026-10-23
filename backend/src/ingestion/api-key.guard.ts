@@ -14,10 +14,11 @@ export class ApiKeyGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean | Promise<boolean> {
     const request = context.switchToHttp().getRequest<{
-      headers: Record<string, string>;
+      headers: Record<string, string | string[] | undefined>;
       accountId?: string;
     }>();
-    const supplied = request.headers['x-api-key'];
+    const suppliedHeader = request.headers['x-api-key'];
+    const supplied = typeof suppliedHeader === 'string' ? suppliedHeader : undefined;
     const { apiKey, accountId } = this.configService.get('ingestion', { infer: true });
     const digest = (value: string) => createHash('sha256').update(value).digest();
     if (!supplied) throw new UnauthorizedException('Invalid API key');

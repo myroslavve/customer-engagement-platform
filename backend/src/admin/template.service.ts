@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AdminDatabaseService } from './admin-database.service';
+import { isUniqueViolation } from '../database/is-unique-violation';
 
 type TemplateInput = { name: string; subject: string; body: string };
 
@@ -17,13 +18,20 @@ export class TemplateService {
   }
 
   async create(accountId: string, input: TemplateInput) {
-    const result = await this.database.query(
-      `INSERT INTO templates (account_id, name, subject, body)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, subject, body, created_at, updated_at`,
-      [accountId, input.name, input.subject, input.body],
-    );
-    return result.rows[0];
+    try {
+      const result = await this.database.query(
+        `INSERT INTO templates (account_id, name, subject, body)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, name, subject, body, created_at, updated_at`,
+        [accountId, input.name, input.subject, input.body],
+      );
+      return result.rows[0];
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException('A template with this name already exists');
+      }
+      throw error;
+    }
   }
 
   async update(accountId: string, id: string, input: TemplateInput) {

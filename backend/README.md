@@ -20,28 +20,29 @@ Run from `backend/` unless noted (commands work in bash and PowerShell).
    (`docker run --rm -v customer-engagement-platform_cep-postgres:/data -v "$PWD":/backup alpine tar czf /backup/cep-postgres.tgz -C /data .`),
    then remove it with `docker volume rm customer-engagement-platform_cep-postgres`.
 
-2. Install dependencies and create the schema:
+2. Install dependencies and copy the environment template:
 
    ```bash
    npm install
    cp .env.example .env
-   npm run migration:run
    ```
 
-3. Create an account and put its id into `INGESTION_ACCOUNT_ID` in `.env`:
-
-   ```bash
-   docker compose exec postgres psql -U cep -d cep -tAc "INSERT INTO accounts (name) VALUES ('local') RETURNING id"
-   ```
-
-4. Set `INGESTION_API_KEY` and `JWT_SECRET`, and set `ADMIN_PASSWORD_HASH` to a bcrypt hash
-   (keep it in single quotes in `.env`, it contains `$`):
+3. Set `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, and optionally `ADMIN_ACCOUNT_NAME` in `.env`.
+   The Admin API migration idempotently creates the first account and admin user. Generate a bcrypt
+   hash with:
 
    ```bash
    node -e "require('bcryptjs').hash(process.argv[1], 12).then(console.log)" "your-password"
    ```
 
-5. Run the application:
+4. Run the migration and retrieve the seeded account id for `INGESTION_ACCOUNT_ID`:
+
+   ```bash
+   npm run migration:run
+   docker compose exec postgres psql -U cep -d cep -tAc "SELECT account_id FROM admin_users WHERE email = 'admin@example.com'"
+   ```
+
+5. Set `INGESTION_API_KEY`, `INGESTION_ACCOUNT_ID`, and `JWT_SECRET`, then run the application:
 
    ```bash
    npm run start:dev
@@ -67,9 +68,9 @@ that did not reach the queue.
 { "userId": "user-123", "eventName": "item_viewed", "properties": { "itemId": "item-456" }, "messageId": "msg-124" }
 ```
 
-**Admin** (`Authorization: Bearer <jwt>`): `POST /admin/auth/login` with `{ email, password }` returns
-`{ accessToken }` (8 h). `/admin/templates`, `/admin/audiences`, `/admin/workflows`, `/admin/activity` are
-placeholders (`501`) until their modules land.
+**Admin** (`Authorization: Bearer <token>`): `POST /admin/auth/login` with `{ email, password }`
+returns `{ accessToken }` (8 h). Audience previews scan profiles in bounded batches; pushing rule
+evaluation into SQL/JSONB is a future scalability improvement.
 
 ## Scripts
 

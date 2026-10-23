@@ -3,7 +3,6 @@ import { AuthModule } from '../auth/auth.module';
 import { DatabaseModule } from '../database/database.module';
 import { ActivityController } from './activity.controller';
 import { ActivityService } from './activity.service';
-import { AdminDatabaseService } from './admin-database.service';
 import { AudienceController } from './audience.controller';
 import { AudienceService } from './audience.service';
 import { TemplateController } from './template.controller';
@@ -14,12 +13,6 @@ import { WorkflowService } from './workflow.service';
 @Module({
   imports: [AuthModule, DatabaseModule],
   controllers: [TemplateController, AudienceController, WorkflowController, ActivityController],
-  providers: [
-    AdminDatabaseService,
-    TemplateService,
-    AudienceService,
-    WorkflowService,
-    ActivityService,
-  ],
+  providers: [TemplateService, AudienceService, WorkflowService, ActivityService],
 })
 export class AdminModule {}

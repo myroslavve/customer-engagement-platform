@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { TemplateService } from './template.service';
 
 describe('TemplateService', () => {
@@ -37,5 +37,16 @@ describe('TemplateService', () => {
         body: 'Body',
       }),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('maps duplicate names to a conflict', async () => {
+    const database = {
+      query: vi.fn().mockRejectedValue({ code: '23505' }),
+    };
+    const service = new TemplateService(database as never);
+
+    await expect(
+      service.create('account-1', { name: 'Welcome', subject: 'Hello', body: 'Body' }),
+    ).rejects.toThrow(ConflictException);
   });
 });

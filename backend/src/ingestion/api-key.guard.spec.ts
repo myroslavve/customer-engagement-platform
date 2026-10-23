@@ -8,6 +8,12 @@ function contextFor(key?: string): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
+function contextForHeaders(headers: Record<string, string | string[]>): ExecutionContext {
+  return {
+    switchToHttp: () => ({ getRequest: () => ({ headers }) }),
+  } as unknown as ExecutionContext;
+}
+
 describe('ApiKeyGuard', () => {
   it('accepts the configured API key', () => {
     const config = { get: vi.fn().mockReturnValue({ apiKey: 'cep_secret' }) };
@@ -45,5 +51,16 @@ describe('ApiKeyGuard', () => {
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(request.accountId).toBe('account-db');
+  });
+
+  it('rejects duplicated API-key headers', async () => {
+    const config = { get: vi.fn().mockReturnValue({ apiKey: 'cep_secret' }) };
+    const database = { query: vi.fn() };
+    const guard = new ApiKeyGuard(config as never, database as never);
+
+    expect(() =>
+      guard.canActivate(contextForHeaders({ 'x-api-key': ['cep_secret', 'cep_other'] })),
+    ).toThrow('Invalid API key');
+    expect(database.query).not.toHaveBeenCalled();
   });
 });

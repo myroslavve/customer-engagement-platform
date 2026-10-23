@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { AudienceService, AudienceRule } from './audience.service';
 
 describe('AudienceService', () => {
@@ -54,5 +54,19 @@ describe('AudienceService', () => {
       'Unsupported audience operator',
     );
     expect(database.query).not.toHaveBeenCalled();
+  });
+
+  it('maps duplicate names to a conflict', async () => {
+    const database = {
+      query: vi.fn().mockRejectedValueOnce({ code: '23505' }),
+    };
+    const service = new AudienceService(database as never);
+
+    await expect(
+      service.create('account-1', {
+        name: 'Paying users',
+        rule: { field: 'traits.plan', op: 'eq', value: 'pro' },
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 });

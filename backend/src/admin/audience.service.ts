@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { AdminDatabaseService } from './admin-database.service';
+import { isUniqueViolation } from '../database/is-unique-violation';
 
 export type AudienceRule =
   | { all: AudienceRule[] }
@@ -76,13 +77,20 @@ export class AudienceService {
 
   async create(accountId: string, input: AudienceInput) {
     this.validateRule(input.rule);
-    const result = await this.database.query(
-      `INSERT INTO audiences (account_id, name, rule)
-       VALUES ($1, $2, $3)
-       RETURNING id, name, rule, created_at, updated_at`,
-      [accountId, input.name, JSON.stringify(input.rule)],
-    );
-    return result.rows[0];
+    try {
+      const result = await this.database.query(
+        `INSERT INTO audiences (account_id, name, rule)
+         VALUES ($1, $2, $3)
+         RETURNING id, name, rule, created_at, updated_at`,
+        [accountId, input.name, JSON.stringify(input.rule)],
+      );
+      return result.rows[0];
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException('An audience with this name already exists');
+      }
+      throw error;
+    }
   }
 
   async preview(accountId: string, rule: AudienceRule): Promise<{ count: number }> {
