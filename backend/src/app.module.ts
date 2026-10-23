@@ -11,6 +11,7 @@ import { DatabaseModule } from './database/database.module';
 import { EventProcessingModule } from './event-processing/event-processing.module';
 import { HealthModule } from './health/health.module';
 import { IngestionModule } from './ingestion/ingestion.module';
+import { MessagingModule } from './messaging/messaging.module';
 import { QueuesModule } from './queues/queues.module';
 import { WorkflowExecutionModule } from './workflow-execution/workflow-execution.module';
 import { WorkflowsModule } from './workflows/workflows.module';
@@ -45,6 +46,7 @@ import { WorkflowsModule } from './workflows/workflows.module';
     WorkflowsModule,
     EventProcessingModule,
     WorkflowExecutionModule,
+    MessagingModule,
     IngestionModule,
     AuthModule,
     AdminModule,
