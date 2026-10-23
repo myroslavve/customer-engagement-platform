@@ -14,8 +14,8 @@ npm run migration:run
 npm run start
 ```
 
-If ports 5432/6379 are taken on your machine, set `POSTGRES_PORT`/`REDIS_PORT` in `.env` and update
-`DATABASE_URL`/`REDIS_URL` to match.
+docker-compose publishes PostgreSQL on host port 5440 and Redis on 6390 (not the defaults, so it does
+not clash with other local projects).
 
 ## Scripts
 
