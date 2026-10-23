@@ -73,9 +73,9 @@ jobs:
           npm run migration:revert
           npm run migration:run
       - run: npm run build
-      - name: Worker boots and consumes the events queue
+      - name: Application boots and consumes the events queue
         run: |
-          node dist/main.worker.js > worker.log 2>&1 &
+          node dist/main.js > worker.log 2>&1 &
           pid=$!
           for _ in $(seq 1 30); do
             grep -q 'Consuming "events"' worker.log && break

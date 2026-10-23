@@ -19,10 +19,11 @@ const redisUrlSchema = z
  */
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().url(),
   /** Parsed into ioredis connection options. */
   REDIS_URL: redisUrlSchema.default('redis://localhost:6379'),
-  WORKER_EVENTS_CONCURRENCY: z.coerce.number().int().positive().default(10),
+  EVENTS_QUEUE_CONCURRENCY: z.coerce.number().int().positive().default(10),
   LOG_LEVEL: z.enum(['error', 'warn', 'log', 'debug', 'verbose']).default('log'),
 });
 

@@ -14,4 +14,5 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 USER node
 # Run migrations as a separate step before rollout: npm run migration:run:prod
-CMD ["node", "dist/main.worker.js"]
+EXPOSE 3000
+CMD ["node", "dist/main.js"]

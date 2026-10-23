@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   image:
-    name: Build and push worker image
+    name: Build and push application image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/worker
+          images: ghcr.io/${{ github.repository }}
           tags: |
             type=sha
             type=ref,event=branch

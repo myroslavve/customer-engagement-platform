@@ -1,7 +1,7 @@
 @startuml C4_L3_API_Server
 !include <C4/C4_Component>
 
-title Customer Engagement Platform - API Server - C4 Component (L3)
+title Customer Engagement Platform - Application: API modules - C4 Component (L3)
 
 AddBoundaryTag("public", $borderColor="#2E7D32", $fontColor="#2E7D32", $borderThickness="2", $legendText="public ingestion boundary")
 AddBoundaryTag("admin", $borderColor="#1565C0", $fontColor="#1565C0", $borderThickness="2", $legendText="admin boundary")
@@ -10,11 +10,11 @@ AddComponentTag("ingest", $bgColor="#43A047", $borderColor="#2E7D32", $fontColor
 System_Ext(product, "Customer Product", "Its backend calls identify / track on user actions.")
 Container_Ext(adminUi, "Admin UI", "React SPA", "Used by the marketing manager.")
 
-Container_Boundary(api, "API Server") {
+Container_Boundary(api, "Application (API modules)") {
 
   Boundary(publicApi, "Public Ingestion API", "/api/v1/*  |  API key auth", $tags="public") {
     Component(ingestMod, "Ingestion Module", "NestJS module", "POST /api/v1/identify\nPOST /api/v1/track\n\nValidates payload, dedupes by messageId, upserts profile, stores event.", $tags="ingest")
-    Component(producer, "Queue Producer", "BullMQ Queue", "Adds process-event jobs to the 'events' queue for the Worker.", $tags="ingest")
+    Component(producer, "Queue Producer", "BullMQ Queue", "Adds process-event jobs to the 'events' queue for the queue processors.", $tags="ingest")
   }
 
   Boundary(adminApi, "Admin API", "/admin/*  |  JWT auth", $tags="admin") {

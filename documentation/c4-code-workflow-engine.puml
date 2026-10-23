@@ -1,5 +1,5 @@
 @startuml C4_L4_Worker
-title Customer Engagement Platform - Worker - Code (L4)
+title Customer Engagement Platform - Application: workflow engine - Code (L4)
 
 skinparam classAttributeIconSize 0
 skinparam linetype ortho

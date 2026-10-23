@@ -15,4 +15,4 @@ import { WorkflowsModule } from './workflows/workflows.module';
     EventProcessingModule,
   ],
 })
-export class WorkerModule {}
+export class AppModule {}

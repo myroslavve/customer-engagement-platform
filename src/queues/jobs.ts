@@ -1,5 +1,5 @@
 /**
- * Job contracts shared by every producer and consumer (API Server and Worker).
+ * Job contracts shared by every producer and consumer (API modules and queue processors).
  *
  * Idempotency: every job has a deterministic jobId so re-adding the same job is a no-op while
  * the previous one is still retained. Retention is bounded by removeOnComplete/removeOnFail, so
