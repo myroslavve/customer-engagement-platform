@@ -69,7 +69,9 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
 
   /**
    * Atomic conditional update: only one of "event arrived" / "timeout" can continue a waiting run.
-   * The claimKey arm lets a retried job re-win its own claim after a failed enqueue.
+   * The claimKey arm lets a retried job re-win its own claim after a failed enqueue; it is limited to
+   * running runs, so it can never revive a completed, failed or cancelled one. The run stops
+   * waiting, so the wait columns are cleared.
    */
   async claim(
     runId: string,
@@ -80,10 +82,11 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
     const result = await this.getRepository(transaction)
       .createQueryBuilder()
       .update(WorkflowRun)
-      .set({ status: RunStatus.Running, claimKey })
+      .set({ status: RunStatus.Running, claimKey, waitingForEvent: null, waitUntil: null })
       .where(
-        'id = :runId AND current_node_id = :nodeId AND (status = :waiting OR claim_key = :claimKey)',
-        { runId, nodeId, waiting: RunStatus.Waiting, claimKey },
+        'id = :runId AND current_node_id = :nodeId' +
+          ' AND (status = :waiting OR (status = :running AND claim_key = :claimKey))',
+        { runId, nodeId, waiting: RunStatus.Waiting, running: RunStatus.Running, claimKey },
       )
       .execute();
     return result.affected === 1;
