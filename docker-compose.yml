@@ -17,6 +17,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    # Append-only file, so queued and delayed BullMQ jobs survive an unclean stop.
+    command: ['redis-server', '--appendonly', 'yes']
     ports:
       - '127.0.0.1:6390:6379'
     healthcheck:
