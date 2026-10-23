@@ -33,14 +33,15 @@ export class ActivityService {
     return result.rows;
   }
 
-  async userTimeline(accountId: string, userId: string) {
+  async userTimeline(accountId: string, userId: string, requestedLimit = 100) {
+    const limit = Math.min(Math.max(requestedLimit, 1), 500);
     const result = await this.database.query(
       `SELECT e.id, e.name, e.properties, e.message_id, e.occurred_at, e.received_at
        FROM events e
        JOIN profiles p ON p.id = e.profile_id
        WHERE e.account_id = $1 AND p.external_id = $2
-       ORDER BY e.occurred_at DESC`,
-      [accountId, userId],
+       ORDER BY e.occurred_at DESC LIMIT $3`,
+      [accountId, userId, limit],
     );
     return result.rows;
   }

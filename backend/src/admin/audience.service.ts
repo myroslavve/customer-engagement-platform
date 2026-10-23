@@ -87,20 +87,37 @@ export class AudienceService {
 
   async preview(accountId: string, rule: AudienceRule): Promise<{ count: number }> {
     this.validateRule(rule);
-    const result = await this.database.query<{
-      id: string;
-      external_id: string;
-      email: string | null;
-      traits: Record<string, unknown>;
-    }>('SELECT id, external_id, email, traits FROM profiles WHERE account_id = $1', [accountId]);
-    const count = result.rows.filter((profile) =>
-      matches(rule, {
-        id: profile.id,
-        externalId: profile.external_id,
-        email: profile.email,
-        traits: profile.traits,
-      }),
-    ).length;
+    const batchSize = 1_000;
+    let lastId: string | undefined;
+    let count = 0;
+    for (;;) {
+      const values: unknown[] = [accountId, batchSize];
+      const cursor = lastId ? ' AND id > $3' : '';
+      if (lastId) values.push(lastId);
+      const result = await this.database.query<{
+        id: string;
+        external_id: string;
+        email: string | null;
+        traits: Record<string, unknown>;
+      }>(
+        `SELECT id, external_id, email, traits
+         FROM profiles
+         WHERE account_id = $1${cursor}
+         ORDER BY id ASC LIMIT $2`,
+        values,
+      );
+      if (result.rows.length === 0) break;
+      count += result.rows.filter((profile) =>
+        matches(rule, {
+          id: profile.id,
+          externalId: profile.external_id,
+          email: profile.email,
+          traits: profile.traits,
+        }),
+      ).length;
+      lastId = result.rows[result.rows.length - 1].id;
+      if (result.rows.length < batchSize) break;
+    }
     return { count };
   }
 

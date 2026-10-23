@@ -42,7 +42,11 @@ export class ActivityController {
   }
 
   @Get('users/:userId')
-  userTimeline(@Req() request: AdminRequest, @Param('userId') userId: string) {
-    return this.activityService.userTimeline(requireAccountId(request), userId);
+  userTimeline(
+    @Req() request: AdminRequest,
+    @Param('userId') userId: string,
+    @Query() filter: ActivityQueryDto,
+  ) {
+    return this.activityService.userTimeline(requireAccountId(request), userId, filter.limit);
   }
 }

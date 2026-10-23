@@ -34,4 +34,14 @@ describe('ActivityService', () => {
     await service.list('account-1', { limit: 10_000 });
     expect(database.query.mock.calls[0][1]).toEqual(['account-1', 500]);
   });
+
+  it('bounds user timelines to the requested limit', async () => {
+    const database = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const service = new ActivityService(database as never);
+
+    await service.userTimeline('account-1', 'user-1', 10_000);
+    expect(database.query.mock.calls[0][1]).toEqual(['account-1', 'user-1', 500]);
+  });
 });
