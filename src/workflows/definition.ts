@@ -1,5 +1,15 @@
-export type ComparisonOp =
-  'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'nin' | 'contains' | 'exists';
+export enum ComparisonOp {
+  Eq = 'eq',
+  Neq = 'neq',
+  Gt = 'gt',
+  Gte = 'gte',
+  Lt = 'lt',
+  Lte = 'lte',
+  In = 'in',
+  Nin = 'nin',
+  Contains = 'contains',
+  Exists = 'exists',
+}
 
 export type Condition =
   | { all: Condition[] }
@@ -7,26 +17,34 @@ export type Condition =
   | { not: Condition }
   | { field: string; op: ComparisonOp; value?: unknown };
 
+export enum NodeType {
+  Branch = 'branch',
+  Delay = 'delay',
+  WaitForEvent = 'wait_for_event',
+  SendEmail = 'send_email',
+  Exit = 'exit',
+}
+
 interface BaseNode {
   /** Matches /^[A-Za-z0-9_-]+$/; used inside BullMQ job ids. */
   id: string;
 }
 
 export interface BranchNode extends BaseNode {
-  type: 'branch';
+  type: NodeType.Branch;
   condition: Condition;
   next: string | null;
   elseNext: string | null;
 }
 
 export interface DelayNode extends BaseNode {
-  type: 'delay';
+  type: NodeType.Delay;
   durationMs: number;
   next: string | null;
 }
 
 export interface WaitForEventNode extends BaseNode {
-  type: 'wait_for_event';
+  type: NodeType.WaitForEvent;
   eventName: string;
   filter?: Condition;
   timeoutMs: number;
@@ -35,13 +53,13 @@ export interface WaitForEventNode extends BaseNode {
 }
 
 export interface SendEmailNode extends BaseNode {
-  type: 'send_email';
+  type: NodeType.SendEmail;
   templateId: string;
   next: string | null;
 }
 
 export interface ExitNode extends BaseNode {
-  type: 'exit';
+  type: NodeType.Exit;
 }
 
 export type WorkflowNode = BranchNode | DelayNode | WaitForEventNode | SendEmailNode | ExitNode;

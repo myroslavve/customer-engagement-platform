@@ -22,27 +22,27 @@ function resolvePath(root: unknown, path: string): unknown {
 
 function compare(op: ComparisonOp, actual: unknown, expected: unknown): boolean {
   switch (op) {
-    case 'exists':
+    case ComparisonOp.Exists:
       return actual !== undefined && actual !== null;
-    case 'eq':
+    case ComparisonOp.Eq:
       return actual === expected;
-    case 'neq':
+    case ComparisonOp.Neq:
       return actual !== expected;
-    case 'in':
+    case ComparisonOp.In:
       return Array.isArray(expected) && expected.includes(actual);
-    case 'nin':
+    case ComparisonOp.Nin:
       return Array.isArray(expected) && !expected.includes(actual);
-    case 'contains':
+    case ComparisonOp.Contains:
       if (typeof actual === 'string' && typeof expected === 'string')
         return actual.includes(expected);
       return Array.isArray(actual) && actual.includes(expected);
-    case 'gt':
+    case ComparisonOp.Gt:
       return sign(actual, expected) > 0;
-    case 'gte':
+    case ComparisonOp.Gte:
       return sign(actual, expected) >= 0;
-    case 'lt':
+    case ComparisonOp.Lt:
       return sign(actual, expected) < 0;
-    case 'lte':
+    case ComparisonOp.Lte:
       return sign(actual, expected) <= 0;
   }
 }

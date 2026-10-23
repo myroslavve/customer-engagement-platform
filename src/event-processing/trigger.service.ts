@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Profile } from '../database/entities/profile.entity';
 import { UserEvent } from '../database/entities/user-event.entity';
 import { RunStatus } from '../database/entities/workflow-run.entity';
+import { StepCause } from '../queues/jobs';
 import { QueueProducer } from '../queues/queue-producer';
 import { ConditionEvaluator } from '../workflows/condition-evaluator';
 import { findNode } from '../workflows/definition';
@@ -52,7 +53,11 @@ export class TriggerService {
         this.logger.error(`Run ${run.id} created as ${run.status}: ${JSON.stringify(run.context)}`);
         continue;
       }
-      await this.queueProducer.enqueueStep({ runId: run.id, nodeId: entryNodeId, cause: 'enter' });
+      await this.queueProducer.enqueueStep({
+        runId: run.id,
+        nodeId: entryNodeId,
+        cause: StepCause.Enter,
+      });
     }
   }
 }
