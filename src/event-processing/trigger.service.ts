@@ -31,7 +31,7 @@ export class TriggerService {
       if (trigger.filter && !this.conditionEvaluator.evaluate(trigger.filter, ctx)) continue;
 
       const entryNode = findNode(version.definition, entryNodeId);
-      const run = await this.runRepository.createIfAbsent({
+      const result = await this.runRepository.createIfAbsent({
         accountId: event.accountId,
         workflowId: version.workflowId,
         workflowVersionId: version.id,
@@ -43,7 +43,7 @@ export class TriggerService {
         finishedAt: entryNode ? null : new Date(),
       });
 
-      if (!run) {
+      if (!result) {
         this.logger.log({
           message: 'Run not started: a live run already exists',
           workflowId: version.workflowId,
@@ -52,12 +52,23 @@ export class TriggerService {
         });
         continue;
       }
-      if (run.status !== RunStatus.Running) {
+      const { run, created } = result;
+      if (created && run.status === RunStatus.Failed) {
         this.logger.error({
-          message: 'Run not started: created in a terminal status',
+          message: 'Run not started: entry node missing from definition',
+          runId: run.id,
+          runContext: run.context,
+        });
+        continue;
+      }
+      // A retried job finds the run its previous attempt created. Only a run still at its entry
+      // node needs the entry step (re-)enqueued; one that already moved on must not restart.
+      if (run.status !== RunStatus.Running || run.currentNodeId !== entryNodeId) {
+        this.logger.debug({
+          message: 'Run already exists for this trigger event, nothing to enqueue',
           runId: run.id,
           status: run.status,
-          runContext: run.context,
+          currentNodeId: run.currentNodeId,
         });
         continue;
       }

@@ -6,6 +6,7 @@ import { AbstractRepository } from '../database/abstract.repository';
 import { WorkflowRun } from '../database/entities/workflow-run.entity';
 import { RunStatus } from '../enums/run-status.enum';
 import { CreateRunInput } from '../types/create-run-input.types';
+import { CreateRunResult } from '../types/create-run-result.types';
 import { Transaction } from '../types/transaction.types';
 
 @Injectable()
@@ -15,28 +16,30 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
   }
 
   /**
-   * INSERT ... ON CONFLICT DO NOTHING, then SELECT by (workflowVersionId, triggerEventId).
-   * Returns the run for this trigger event (fresh or pre-existing), or null when the conflict was
-   * the live-run-per-profile index (another run of this workflow is live for the profile).
+   * INSERT ... ON CONFLICT DO NOTHING RETURNING id, then SELECT by (workflowVersionId, triggerEventId).
+   * Returns the run for this trigger event with created = whether this call inserted it, or null
+   * when the conflict was the live-run-per-profile index (another run of this workflow is live).
    */
   async createIfAbsent(
     input: CreateRunInput,
     transaction?: Transaction,
-  ): Promise<WorkflowRun | null> {
-    await this.getRepository(transaction)
+  ): Promise<CreateRunResult | null> {
+    const insertResult = await this.getRepository(transaction)
       .createQueryBuilder()
       .insert()
       .into(WorkflowRun)
       // QueryDeepPartialEntity cannot map Record<string, unknown> jsonb columns; the shape is exact.
       .values(input as QueryDeepPartialEntity<WorkflowRun>)
       .orIgnore()
+      .returning('id')
       .execute();
-    return this.findOne(
+    const run = await this.findOne(
       {
         where: { workflowVersionId: input.workflowVersionId, triggerEventId: input.triggerEventId },
       },
       transaction,
     );
+    return run ? { run, created: (insertResult.raw as unknown[]).length > 0 } : null;
   }
 
   /**
