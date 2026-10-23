@@ -1,9 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AdminDatabaseService } from '../src/admin/admin-database.service';
 import { Account } from '../src/database/entities/account.entity';
-import { truncateAll } from './setup/database';
 import { createAccount } from './setup/fixtures';
-import { obliterateQueues } from './setup/queues';
 import { createTestApp, TestApp } from './setup/test-app';
 
 const UPDATE_RETURNING = 'UPDATE accounts SET name = $1 WHERE id = $2 RETURNING id, name';
@@ -19,8 +17,7 @@ describe('AdminDatabaseService', () => {
   });
   afterAll(() => testApp.close());
   beforeEach(async () => {
-    await obliterateQueues(testApp.app);
-    await truncateAll(testApp.dataSource);
+    await testApp.reset();
     account = await createAccount(testApp.dataSource);
   });
 

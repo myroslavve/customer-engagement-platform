@@ -1,16 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { EventOutbox } from '../src/database/entities/event-outbox.entity';
 import { WorkflowRun } from '../src/database/entities/workflow-run.entity';
 import { ComparisonOp } from '../src/enums/comparison-op.enum';
 import { NodeType } from '../src/enums/node-type.enum';
 import { RunStatus } from '../src/enums/run-status.enum';
 import { StepCause } from '../src/enums/step-cause.enum';
 import { WorkflowStatus } from '../src/enums/workflow-status.enum';
+import { OutboxService } from '../src/ingestion/outbox.service';
 import { stepJobId } from '../src/queues/jobs';
 import { QueueProducer } from '../src/queues/queue-producer';
 import { QUEUE_EVENTS, QUEUE_WORKFLOW_STEPS } from '../src/queues/queue-names';
 import { WorkflowDefinition } from '../src/types/workflow-definition.types';
-import { truncateAll } from './setup/database';
 import {
   createAccount,
   createEvent,
@@ -18,8 +19,9 @@ import {
   createRun,
   createWorkflow,
 } from './setup/fixtures';
-import { getQueue, obliterateQueues, reprocessJob, waitForJobState } from './setup/queues';
+import { getQueue, reprocessJob, waitForJobState } from './setup/queues';
 import { createTestApp, TestApp } from './setup/test-app';
+import { waitFor } from './setup/wait-for';
 
 const WAIT_DEFINITION: WorkflowDefinition = {
   trigger: { eventName: 'product_viewed' },
@@ -38,6 +40,8 @@ const WAIT_DEFINITION: WorkflowDefinition = {
   ],
 };
 
+const WAIT_UNTIL = new Date(Date.now() + 60_000);
+
 describe('events processing', () => {
   let testApp: TestApp;
   let queueProducer: QueueProducer;
@@ -52,10 +56,7 @@ describe('events processing', () => {
     testApp.resumeQueue(QUEUE_WORKFLOW_STEPS);
     await testApp.close();
   });
-  beforeEach(async () => {
-    await obliterateQueues(testApp.app);
-    await truncateAll(testApp.dataSource);
-  });
+  beforeEach(() => testApp.reset());
 
   const runs = () => testApp.dataSource.getRepository(WorkflowRun);
   const stepsQueue = () => getQueue(testApp.app, QUEUE_WORKFLOW_STEPS);
@@ -208,6 +209,7 @@ describe('events processing', () => {
         status: RunStatus.Waiting,
         currentNodeId: 'wait',
         waitingForEvent: 'purchase',
+        waitUntil: WAIT_UNTIL,
       });
 
       const small = await createEvent(testApp.dataSource, account, profile, 'purchase', {
@@ -221,6 +223,7 @@ describe('events processing', () => {
       expect(await runs().findOneByOrFail({ id: run.id })).toMatchObject({
         status: RunStatus.Waiting,
         claimKey: null,
+        waitUntil: WAIT_UNTIL,
       });
       expect(await pendingStepJobs()).toBe(0);
 
@@ -250,6 +253,7 @@ describe('events processing', () => {
         status: RunStatus.Waiting,
         currentNodeId: 'wait',
         waitingForEvent: 'purchase',
+        waitUntil: WAIT_UNTIL,
       });
       const stranger = await createProfile(testApp.dataSource, account);
       const purchase = await createEvent(testApp.dataSource, account, stranger, 'purchase', {
@@ -257,7 +261,10 @@ describe('events processing', () => {
       });
 
       await processEvent(purchase.id);
-      expect((await runs().findOneByOrFail({ id: run.id })).status).toBe(RunStatus.Waiting);
+      expect(await runs().findOneByOrFail({ id: run.id })).toMatchObject({
+        status: RunStatus.Waiting,
+        waitUntil: WAIT_UNTIL,
+      });
       expect(await pendingStepJobs()).toBe(0);
     });
 
@@ -311,6 +318,23 @@ describe('events processing', () => {
     });
   });
 
+  describe('outbox', () => {
+    it('publishes a stored event whose job never reached the queue, then drops the row', async () => {
+      const { account, profile } = await seed();
+      const event = await createEvent(testApp.dataSource, account, profile, 'product_viewed');
+      await testApp.dataSource.getRepository(EventOutbox).save({ eventId: event.id });
+
+      await testApp.get(OutboxService).publishPending();
+      await waitForJobState(testApp.app, QUEUE_EVENTS, event.id, 'completed');
+      expect(await runs().countBy({ triggerEventId: event.id })).toBe(1);
+      // The 5 s poller may have published it first; either way the row ends up deleted.
+      await waitFor(
+        () => testApp.dataSource.getRepository(EventOutbox).count(),
+        (count) => count === 0,
+      );
+    });
+  });
+
   describe('failures', () => {
     it('fails at once, without retries, when the profile belongs to another account', async () => {
       const { account } = await seed();
@@ -337,7 +361,7 @@ describe('events processing', () => {
 
       await processEvent(eventId, 'failed');
       const job = await getQueue(testApp.app, QUEUE_EVENTS).getJob(eventId);
-      expect(job?.attemptsMade).toBe(5);
+      expect(job?.attemptsMade).toBe(job?.opts.attempts);
       expect(job?.failedReason).toContain('not found');
     });
   });

@@ -5,16 +5,14 @@ import { DefaultJobOptions } from 'bullmq';
 import { AppConfig } from '../config/configuration';
 import { QueueConfig } from '../config/queue.config';
 import { QueueProducer } from './queue-producer';
-import { QUEUE_EMAIL_SEND, QUEUE_EVENTS, QUEUE_WORKFLOW_STEPS } from './queue-names';
+import { QUEUE_NAMES } from './queue-names';
 
 const JOB_RETENTION: DefaultJobOptions = {
   removeOnComplete: { age: 24 * 60 * 60, count: 10_000 },
   removeOnFail: { age: 7 * 24 * 60 * 60 },
 };
 
-const QUEUE_NAMES = [QUEUE_EVENTS, QUEUE_WORKFLOW_STEPS, QUEUE_EMAIL_SEND];
-
-export function buildDefaultJobOptions(config: QueueConfig): DefaultJobOptions {
+function buildDefaultJobOptions(config: QueueConfig): DefaultJobOptions {
   return {
     attempts: config.jobAttempts,
     backoff: { type: 'exponential', delay: config.backoffDelayMs },

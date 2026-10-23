@@ -35,6 +35,7 @@ export type RunOverrides = {
   status: RunStatus;
   currentNodeId: string | null;
   waitingForEvent?: string | null;
+  waitUntil?: Date | null;
   claimKey?: string | null;
   context?: RunState;
 };
@@ -111,6 +112,7 @@ export function createRun(
     profileId: profile.id,
     triggerEventId: triggerEvent.id,
     waitingForEvent: null,
+    waitUntil: null,
     claimKey: null,
     context: {},
     ...overrides,

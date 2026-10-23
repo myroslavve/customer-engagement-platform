@@ -3,14 +3,19 @@ import './ts-node';
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { DatabaseConfig, databaseConfig } from '../../src/config/db.config';
+import { redisConfig } from '../../src/config/redis.config';
 import { buildDataSourceOptions } from '../../src/database/database.module';
 
 /** Once per run: create the test database if missing and bring it to the latest migration. */
 export default async function globalSetup(): Promise<void> {
   const config = databaseConfig();
-  // truncateAll empties every table between tests; never point it at a real database.
+  // Tests truncate every table and obliterate the queues; never point them at real data.
   if (!config.database.endsWith('_test')) {
     throw new Error(`Refusing to run integration tests against database "${config.database}"`);
+  }
+  const { db } = redisConfig();
+  if (db === 0) {
+    throw new Error('Refusing to run integration tests against Redis db 0 (the app default)');
   }
   await createDatabaseIfMissing(config);
   await runMigrations(config);

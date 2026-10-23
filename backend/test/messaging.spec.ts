@@ -15,7 +15,6 @@ import { QueueProducer } from '../src/queues/queue-producer';
 import { QUEUE_EMAIL_SEND } from '../src/queues/queue-names';
 import { WorkflowDefinition } from '../src/types/workflow-definition.types';
 import { buildRunContext } from '../src/workflows/run-context';
-import { truncateAll } from './setup/database';
 import {
   createAccount,
   createEvent,
@@ -25,7 +24,7 @@ import {
   createWorkflow,
   ProfileOverrides,
 } from './setup/fixtures';
-import { getQueue, obliterateQueues, reprocessJob, waitForJobState } from './setup/queues';
+import { getQueue, reprocessJob, waitForJobState } from './setup/queues';
 import { createTestApp, TestApp } from './setup/test-app';
 import { waitFor } from './setup/wait-for';
 
@@ -59,11 +58,7 @@ describe('messaging', () => {
     queueProducer = testApp.get(QueueProducer);
   });
   afterAll(() => testApp.close());
-  beforeEach(async () => {
-    await obliterateQueues(testApp.app);
-    await truncateAll(testApp.dataSource);
-    testApp.fakeEmailProvider.reset();
-  });
+  beforeEach(() => testApp.reset());
 
   const messages = () => testApp.dataSource.getRepository(Message);
   const runs = () => testApp.dataSource.getRepository(WorkflowRun);

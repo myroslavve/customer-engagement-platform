@@ -1,12 +1,12 @@
 import { getQueueToken } from '@nestjs/bullmq';
 import { INestApplication } from '@nestjs/common';
 import { JobState, Queue } from 'bullmq';
-import { QUEUE_EMAIL_SEND, QUEUE_EVENTS, QUEUE_WORKFLOW_STEPS } from '../../src/queues/queue-names';
+import { QUEUE_NAMES } from '../../src/queues/queue-names';
 import { waitFor } from './wait-for';
 
-const QUEUE_NAMES = [QUEUE_EVENTS, QUEUE_WORKFLOW_STEPS, QUEUE_EMAIL_SEND];
-
 type JobStateOrUnknown = JobState | 'unknown';
+
+const SETTLED_STATES: JobStateOrUnknown[] = ['completed', 'failed'];
 
 export function getQueue(app: INestApplication, queueName: string): Queue {
   return app.get<Queue>(getQueueToken(queueName));
@@ -16,12 +16,20 @@ export async function obliterateQueues(app: INestApplication): Promise<void> {
   for (const name of QUEUE_NAMES) await getQueue(app, name).obliterate({ force: true });
 }
 
-/** Re-adding a retained job id is a BullMQ no-op, so remove it first; then the processor runs it again. */
+/**
+ * Re-adding a retained job id is a BullMQ no-op, so remove it first; then the processor runs it
+ * again. Waits until the job settled: an active job is locked and cannot be removed, and the
+ * database may already show its outcome while BullMQ has not moved it to completed yet.
+ */
 export async function reprocessJob(
   app: INestApplication,
   queueName: string,
   jobId: string,
 ): Promise<void> {
+  await waitFor(
+    () => getJobState(app, queueName, jobId),
+    (state) => SETTLED_STATES.includes(state),
+  );
   const queue = getQueue(app, queueName);
   const job = await queue.getJob(jobId);
   if (!job) throw new Error(`Job ${jobId} not found in queue ${queueName}`);

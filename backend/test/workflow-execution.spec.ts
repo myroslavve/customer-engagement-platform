@@ -14,7 +14,6 @@ import { QueueProducer } from '../src/queues/queue-producer';
 import { QUEUE_EVENTS, QUEUE_WORKFLOW_STEPS } from '../src/queues/queue-names';
 import { StepJob } from '../src/types/job.types';
 import { ExitNode, WorkflowDefinition, WorkflowNode } from '../src/types/workflow-definition.types';
-import { truncateAll } from './setup/database';
 import {
   createAccount,
   createEvent,
@@ -23,7 +22,7 @@ import {
   createWorkflow,
   RunOverrides,
 } from './setup/fixtures';
-import { getQueue, obliterateQueues, reprocessJob, waitForJobState } from './setup/queues';
+import { getQueue, reprocessJob, waitForJobState } from './setup/queues';
 import { createTestApp, TestApp } from './setup/test-app';
 import { waitFor } from './setup/wait-for';
 
@@ -34,12 +33,13 @@ function definition(entryNodeId: string, nodes: WorkflowNode[]): WorkflowDefinit
   return { trigger: { eventName: 'product_viewed' }, entryNodeId, nodes };
 }
 
+// The timeout never elapses on its own: tests that want it promote the delayed job (fireTimeout).
 const WAIT_DEFINITION = definition('wait', [
   {
     id: 'wait',
     type: NodeType.WaitForEvent,
     eventName: 'purchase',
-    timeoutMs: 300,
+    timeoutMs: 60_000,
     next: 'exit',
     timeoutNext: 'exit2',
   },
@@ -58,10 +58,7 @@ describe('workflow execution', () => {
     queueProducer = testApp.get(QueueProducer);
   });
   afterAll(() => testApp.close());
-  beforeEach(async () => {
-    await obliterateQueues(testApp.app);
-    await truncateAll(testApp.dataSource);
-  });
+  beforeEach(() => testApp.reset());
 
   const runs = () => testApp.dataSource.getRepository(WorkflowRun);
   const steps = (runId: string) =>
@@ -102,6 +99,14 @@ describe('workflow execution', () => {
   async function runStepJob(job: StepJob, state: 'completed' | 'failed'): Promise<void> {
     await queueProducer.enqueueStep(job);
     await waitForJobState(testApp.app, QUEUE_WORKFLOW_STEPS, stepJobId(job), state);
+  }
+
+  /** Makes the armed timeout job of the run's wait node due now; returns its job id. */
+  async function fireTimeout(runId: string): Promise<string> {
+    const jobId = stepJobId({ runId, nodeId: 'wait', cause: StepCause.Timeout });
+    await waitForJobState(testApp.app, QUEUE_WORKFLOW_STEPS, jobId, 'delayed');
+    await (await stepsQueue().getJob(jobId))!.promote();
+    return jobId;
   }
 
   const waitForRun = (runId: string, predicate: (run: WorkflowRun) => boolean) =>
@@ -181,10 +186,9 @@ describe('workflow execution', () => {
       const waiting = await waitForStatus(run.id, RunStatus.Waiting);
       expect(waiting).toMatchObject({ currentNodeId: 'wait', waitingForEvent: 'purchase' });
       expect(waiting.waitUntil).not.toBeNull();
-      const timeoutJob = await stepsQueue().getJob(
-        stepJobId({ runId: run.id, nodeId: 'wait', cause: StepCause.Timeout }),
-      );
-      expect(timeoutJob?.opts.delay).toBeGreaterThan(0);
+      const timeoutJobId = stepJobId({ runId: run.id, nodeId: 'wait', cause: StepCause.Timeout });
+      await waitForJobState(testApp.app, QUEUE_WORKFLOW_STEPS, timeoutJobId, 'delayed');
+      expect((await stepsQueue().getJob(timeoutJobId))?.opts.delay).toBeGreaterThan(59_000);
     });
 
     it('continues on the event path when the event arrives in time', async () => {
@@ -200,15 +204,16 @@ describe('workflow execution', () => {
         ['wait', StepCause.Event],
         ['exit', StepCause.Enter],
       ]);
-      // The timeout fired later (or not yet) and lost the race: nothing was recorded for it.
-      const timeoutJobId = stepJobId({ runId: run.id, nodeId: 'wait', cause: StepCause.Timeout });
-      await stepsQueue().promoteJobs();
+      // The timeout fires after the event won: it cannot claim the run, nothing is recorded for it.
+      const timeoutJobId = await fireTimeout(run.id);
       await waitForJobState(testApp.app, QUEUE_WORKFLOW_STEPS, timeoutJobId, 'completed');
       expect(await steps(run.id)).toHaveLength(3);
     });
 
     it('continues on the timeout path when no event arrives', async () => {
       const { run } = await startRun(WAIT_DEFINITION);
+      await waitForStatus(run.id, RunStatus.Waiting);
+      await fireTimeout(run.id);
       await waitForStatus(run.id, RunStatus.Completed);
       expect((await steps(run.id)).map((s) => [s.nodeId, s.cause])).toEqual([
         ['wait', StepCause.Enter],
@@ -217,8 +222,38 @@ describe('workflow execution', () => {
       ]);
     });
 
+    it('completes the run from the timeout when timeoutNext is null', async () => {
+      const { run } = await startRun(
+        definition('wait', [
+          {
+            id: 'wait',
+            type: NodeType.WaitForEvent,
+            eventName: 'purchase',
+            timeoutMs: 60_000,
+            next: 'exit',
+            timeoutNext: null,
+          },
+          EXIT,
+        ]),
+      );
+      await waitForStatus(run.id, RunStatus.Waiting);
+      await fireTimeout(run.id);
+      const completed = await waitForStatus(run.id, RunStatus.Completed);
+      expect(completed).toMatchObject({
+        currentNodeId: null,
+        waitingForEvent: null,
+        waitUntil: null,
+      });
+      expect((await steps(run.id)).map((s) => [s.nodeId, s.cause])).toEqual([
+        ['wait', StepCause.Enter],
+        ['wait', StepCause.Timeout],
+      ]);
+    });
+
     it('ignores the event once the timeout has won', async () => {
       const { run, account, profile } = await startRun(WAIT_DEFINITION);
+      await waitForStatus(run.id, RunStatus.Waiting);
+      await fireTimeout(run.id);
       await waitForStatus(run.id, RunStatus.Completed);
       const purchase = await createEvent(testApp.dataSource, account, profile, 'purchase');
       await queueProducer.enqueueProcessEvent({ eventId: purchase.id });
@@ -292,6 +327,8 @@ describe('workflow execution', () => {
         output: null,
       });
       expect(recorded[0].error).toContain('nope');
+      // The run is failed before the job is: wait for BullMQ to settle it.
+      await waitForJobState(testApp.app, QUEUE_WORKFLOW_STEPS, recorded[0].jobId, 'failed');
       const job = await stepsQueue().getJob(recorded[0].jobId);
       expect(job?.attemptsMade).toBe(1);
       expect(await pendingStepJobs()).toBe(0);
@@ -377,8 +414,9 @@ describe('workflow execution', () => {
           EXIT,
         ]),
       );
-      await waitForRun(run.id, (current) => current.currentNodeId === 'exit');
+      // The follow-up is enqueued after the delay step commits: wait for the job, not the run.
       const exitJobId = stepJobId({ runId: run.id, nodeId: 'exit', cause: StepCause.Enter });
+      await waitForJobState(testApp.app, QUEUE_WORKFLOW_STEPS, exitJobId, 'delayed');
       await (await stepsQueue().getJob(exitJobId))!.remove();
       const [delayStep] = await steps(run.id);
       const dueAt = new Date(delayStep.output!.dueAt!).getTime();
@@ -395,7 +433,9 @@ describe('workflow execution', () => {
       await waitForStatus(run.id, RunStatus.Completed);
       expect((await steps(run.id)).map((s) => s.nodeId)).toEqual(['delay', 'exit']);
       // Past dueAt the follow-up is due at once; a restarted delay would wait another 500 ms.
-      expect((await stepsQueue().getJob(exitJobId))?.opts.delay ?? 0).toBe(0);
+      const reenqueued = await stepsQueue().getJob(exitJobId);
+      expect(reenqueued).toBeDefined();
+      expect(reenqueued!.opts.delay ?? 0).toBe(0);
     });
   });
 
@@ -410,7 +450,8 @@ describe('workflow execution', () => {
       const job: StepJob = { runId: run.id, nodeId: 'exit', cause: StepCause.Enter };
 
       await runStepJob(job, 'failed');
-      expect((await stepsQueue().getJob(stepJobId(job)))?.attemptsMade).toBe(5);
+      const failedJob = await stepsQueue().getJob(stepJobId(job));
+      expect(failedJob?.attemptsMade).toBe(failedJob?.opts.attempts);
       expect(await runs().findOneByOrFail({ id: run.id })).toMatchObject({
         status: RunStatus.Running,
         currentNodeId: 'exit',
