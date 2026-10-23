@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash, timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
@@ -9,7 +10,11 @@ export class ApiKeyGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<{ headers: Record<string, string> }>();
     const supplied = request.headers['x-api-key'];
     const expected = this.config.getOrThrow<string>('INGESTION_API_KEY');
-    if (!supplied || supplied !== expected) {
+    const digest = (value: string) => createHash('sha256').update(value).digest();
+    if (
+      !supplied ||
+      !timingSafeEqual(digest(supplied), digest(expected))
+    ) {
       throw new UnauthorizedException('Invalid API key');
     }
     return true;

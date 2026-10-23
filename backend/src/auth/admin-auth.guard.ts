@@ -10,8 +10,10 @@ export class AdminAuthGuard implements CanActivate {
     const token = request.headers.authorization?.replace(/^Bearer\s+/i, '');
     if (!token) throw new UnauthorizedException('Missing bearer token');
     try {
-      this.jwt.verify(token, { secret: process.env.JWT_SECRET });
-      return true;
+      const payload = this.jwt.verify<{ role?: string }>(token, {
+        secret: process.env.JWT_SECRET
+      });
+      return payload.role === 'admin';
     } catch {
       throw new UnauthorizedException('Invalid bearer token');
     }

@@ -47,7 +47,8 @@ export class IngestionService {
         const event = await client.query<{ id: string }>(
           `INSERT INTO events (account_id, profile_id, name, properties, message_id, occurred_at)
            VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
-           ON CONFLICT (account_id, message_id) DO UPDATE SET message_id = EXCLUDED.message_id
+           ON CONFLICT (account_id, message_id) WHERE message_id IS NOT NULL
+           DO UPDATE SET message_id = EXCLUDED.message_id
            RETURNING id`,
           [
             accountId,

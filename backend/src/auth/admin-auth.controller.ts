@@ -1,6 +1,8 @@
 import { Body, Controller, Post, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Throttle } from '@nestjs/throttler';
+import { compare } from 'bcryptjs';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 
 class LoginDto {
@@ -20,10 +22,14 @@ export class AdminAuthController {
   ) {}
 
   @Post('login')
-  login(@Body() input: LoginDto): { accessToken: string } {
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async login(@Body() input: LoginDto): Promise<{ accessToken: string }> {
     if (
       input.email !== this.config.getOrThrow<string>('ADMIN_EMAIL') ||
-      input.password !== this.config.getOrThrow<string>('ADMIN_PASSWORD')
+      !(await compare(
+        input.password,
+        this.config.getOrThrow<string>('ADMIN_PASSWORD_HASH')
+      ))
     ) {
       throw new UnauthorizedException('Invalid credentials');
     }

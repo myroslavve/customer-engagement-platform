@@ -10,9 +10,26 @@ This directory contains the API and its infrastructure integration. Worker imple
    docker compose up -d postgres redis
    ```
 
-2. Copy `backend\.env.example` to `backend\.env` and set local secrets. Create an account in PostgreSQL and set its UUID as `INGESTION_ACCOUNT_ID`.
-3. Apply the schema with `psql "$env:DATABASE_URL" -f backend\db\001_initial.sql`.
-4. Install and run the API:
+2. Copy `backend\.env.example` to `backend\.env` and set local secrets.
+   Generate an admin password hash from the backend directory with
+   `node -e "require('bcryptjs').hash(process.argv[1], 12).then(console.log)" "your-password"`
+   and set the result as `ADMIN_PASSWORD_HASH`.
+3. Set the database URL in the current PowerShell session, then apply the schema:
+
+   ```powershell
+   $env:DATABASE_URL = "postgres://cep:cep@localhost:5432/cep"
+   psql $env:DATABASE_URL -f backend\db\001_initial.sql
+   ```
+
+   If you changed `POSTGRES_PORT`, use that port in `DATABASE_URL`.
+
+4. Create an account after applying the schema and set its UUID as `INGESTION_ACCOUNT_ID`:
+
+   ```powershell
+   $env:INGESTION_ACCOUNT_ID = psql $env:DATABASE_URL -tAc "INSERT INTO accounts (name) VALUES ('local') RETURNING id" | Select-Object -First 1
+   $env:INGESTION_ACCOUNT_ID = $env:INGESTION_ACCOUNT_ID.Trim()
+   ```
+5. Install and run the API:
 
    ```powershell
    cd backend

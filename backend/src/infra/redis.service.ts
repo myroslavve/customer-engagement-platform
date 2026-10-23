@@ -7,13 +7,24 @@ export class RedisService implements OnModuleDestroy {
   readonly client: Redis;
 
   constructor(config: ConfigService) {
-    this.client = new Redis(config.getOrThrow<string>('REDIS_URL'), {
-      maxRetriesPerRequest: null
-    });
+    this.client = new Redis(config.getOrThrow<string>('REDIS_URL'));
   }
 
-  async healthcheck(): Promise<void> {
-    await this.client.ping();
+  async healthcheck(timeoutMs = 2_000): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        this.client.ping(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Redis health check timed out')),
+            timeoutMs
+          );
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   async onModuleDestroy(): Promise<void> {

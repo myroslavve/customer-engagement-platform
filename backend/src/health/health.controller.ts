@@ -12,7 +12,10 @@ export class HealthController {
   @Get()
   async getHealth(): Promise<{ status: string; database: string; redis: string }> {
     try {
-      await Promise.all([this.database.healthcheck(), this.redis.healthcheck()]);
+      await Promise.all([
+        this.database.healthcheck(),
+        this.redis.healthcheck(2_000)
+      ]);
       return { status: 'ok', database: 'ok', redis: 'ok' };
     } catch {
       throw new ServiceUnavailableException({

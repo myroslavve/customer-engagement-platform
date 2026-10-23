@@ -29,6 +29,10 @@
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.4",
     "jest": "^30.0.0",
+    "eslint": "^9.39.0",
+    "typescript-eslint": "^8.72.0",
+    "@nestjs/throttler": "^6.4.0",
+    "bcryptjs": "^3.0.2",
     "ts-jest": "^29.4.0",
     "tsx": "^4.20.0",
     "typescript": "^5.8.3"
