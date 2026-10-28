@@ -12,6 +12,18 @@ export class ProfileRepository extends AbstractRepository<Profile> {
     super(profileRepository);
   }
 
+  findByExternalId(
+    accountId: string,
+    externalId: string,
+    transaction?: Transaction,
+  ): Promise<Profile | null> {
+    return this.findOne({ where: { accountId, externalId } }, transaction);
+  }
+
+  async markUnsubscribed(id: string, transaction?: Transaction): Promise<void> {
+    await this.getRepository(transaction).update(id, { unsubscribedAt: new Date() });
+  }
+
   /**
    * Creates the profile or updates it in place: a null email keeps the stored one, traits are merged.
    * Raw SQL because the query builder cannot express the COALESCE / jsonb merge update. Returns its id.

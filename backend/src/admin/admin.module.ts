@@ -14,5 +14,6 @@ import { WorkflowService } from './workflow.service';
   imports: [AuthModule, DatabaseModule],
   controllers: [TemplateController, AudienceController, WorkflowController, ActivityController],
   providers: [TemplateService, AudienceService, WorkflowService, ActivityService],
+  exports: [TemplateService, WorkflowService],
 })
 export class AdminModule {}

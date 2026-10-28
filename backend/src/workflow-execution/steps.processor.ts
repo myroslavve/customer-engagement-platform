@@ -3,7 +3,7 @@ import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job, UnrecoverableError } from 'bullmq';
 import { AppConfig } from '../config/configuration';
-import { isFinalAttempt } from '../queues/job-attempts';
+import { attemptNumber, isFinalAttempt } from '../queues/job-attempts';
 import { QUEUE_WORKFLOW_STEPS } from '../queues/queue-names';
 import { StepJob } from '../types/job.types';
 import { WorkflowRunner } from './workflow-runner';
@@ -80,7 +80,7 @@ export class StepsProcessor extends WorkerHost implements OnApplicationBootstrap
       runId: job.data.runId,
       nodeId: job.data.nodeId,
       cause: job.data.cause,
-      attempt: job.attemptsStarted,
+      attempt: attemptNumber(job),
       maxAttempts: job.opts.attempts ?? 1,
       error: error instanceof Error ? error.message : String(error),
     };

@@ -10,13 +10,8 @@ export class Workflow extends AbstractEntity {
   @ForeignKey(() => Account, { name: 'fk_workflows_account_id' })
   accountId: string;
   @Column('text') name: string;
-  @Column({
-    type: 'enum',
-    enum: WorkflowStatus,
-    enumName: 'workflow_status',
-    default: WorkflowStatus.Draft,
-  })
-  status: WorkflowStatus;
+  // varchar, not a PG enum: a new status must not need ALTER TYPE.
+  @Column({ type: 'varchar', default: WorkflowStatus.Draft }) status: WorkflowStatus;
   @Column({ type: 'uuid', nullable: true })
   @ForeignKey(() => WorkflowVersion, { name: 'fk_workflows_published_version_id' })
   publishedVersionId: string | null;

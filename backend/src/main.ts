@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { Logger, LoggerService, ValidationPipe } from '@nestjs/common';
+import { Logger, LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
@@ -10,7 +10,6 @@ import { AppConfig } from './config/configuration';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, abortOnError: false });
   app.useLogger(app.get<LoggerService>(WINSTON_MODULE_NEST_PROVIDER));
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   const config = app
     .get<ConfigService<AppConfig, true>>(ConfigService)
     .get('server', { infer: true });

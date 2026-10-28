@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { DelayedError, Job, Queue } from 'bullmq';
 import { AppConfig } from '../config/configuration';
 import { MessageStatus } from '../enums/message-status.enum';
-import { isFinalAttempt } from '../queues/job-attempts';
+import { attemptNumber, isFinalAttempt } from '../queues/job-attempts';
 import { QUEUE_EMAIL_SEND } from '../queues/queue-names';
 import { EmailSendJob } from '../types/job.types';
 import { EmailService } from './email.service';
@@ -43,7 +43,7 @@ export class EmailSendProcessor extends WorkerHost implements OnApplicationBoots
   /** Once BullMQ gives up (attempts exhausted or unrecoverable), the message is failed with the error. */
   async process(job: Job<EmailSendJob, void, string>, token?: string): Promise<void> {
     try {
-      await this.emailService.send(job.data.messageId, job.attemptsStarted);
+      await this.emailService.send(job.data.messageId, attemptNumber(job));
     } catch (error) {
       if (error instanceof SendInProgressError) return this.postpone(job, error, token);
       if (isFinalAttempt(job, error)) await this.failMessage(job, error);
@@ -77,7 +77,7 @@ export class EmailSendProcessor extends WorkerHost implements OnApplicationBoots
     if (!job || !(await job.isFailed())) return;
     const message = await this.messageRepository.findById(job.data.messageId);
     if (message?.status === MessageStatus.Queued) {
-      return this.messageRepository.markFailed(message.id, job.failedReason, job.attemptsStarted);
+      return this.messageRepository.markFailed(message.id, job.failedReason, attemptNumber(job));
     }
     if (message?.status === MessageStatus.Sending) await job.retry('failed');
   }
@@ -99,6 +99,6 @@ export class EmailSendProcessor extends WorkerHost implements OnApplicationBoots
       { message: 'send-email failed', messageId: job.data.messageId, error: message },
       error instanceof Error ? error.stack : undefined,
     );
-    await this.messageRepository.markFailed(job.data.messageId, message, job.attemptsStarted);
+    await this.messageRepository.markFailed(job.data.messageId, message, attemptNumber(job));
   }
 }

@@ -1,6 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { WinstonModule, utilities as nestWinstonUtilities } from 'nest-winston';
 import { format, transports } from 'winston';
@@ -8,6 +8,7 @@ import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { AppConfig, configuration } from './config/configuration';
 import { DatabaseModule } from './database/database.module';
+import { DevToolsModule } from './dev-tools/dev-tools.module';
 import { EventProcessingModule } from './event-processing/event-processing.module';
 import { HealthModule } from './health/health.module';
 import { IngestionModule } from './ingestion/ingestion.module';
@@ -50,8 +51,13 @@ import { WorkflowsModule } from './workflows/workflows.module';
     IngestionModule,
     AuthModule,
     AdminModule,
+    DevToolsModule,
     HealthModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  // Global pipe as a provider (not in main.ts), so the integration tests get the same validation.
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_PIPE, useValue: new ValidationPipe({ whitelist: true, transform: true }) },
+  ],
 })
 export class AppModule {}

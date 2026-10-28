@@ -16,7 +16,8 @@ import { Workflow } from './workflow.entity';
 // so migration:generate sees no drift.
 @Index('uq_workflow_runs_live_per_profile', ['workflowId', 'profileId'], {
   unique: true,
-  where: "(status = ANY (ARRAY['running'::workflow_run_status, 'waiting'::workflow_run_status]))",
+  where:
+    "((status)::text = ANY ((ARRAY['running'::character varying, 'waiting'::character varying])::text[]))",
 })
 export class WorkflowRun extends AbstractEntity {
   @Column('uuid')
@@ -34,7 +35,8 @@ export class WorkflowRun extends AbstractEntity {
   @Column('uuid')
   @ForeignKey(() => UserEvent, { name: 'fk_workflow_runs_trigger_event_id' })
   triggerEventId: string;
-  @Column({ type: 'enum', enum: RunStatus, enumName: 'workflow_run_status' }) status: RunStatus;
+  // varchar, not a PG enum: a new status must not need ALTER TYPE.
+  @Column('varchar') status: RunStatus;
   @Column({ type: 'text', nullable: true }) currentNodeId: string | null;
   @Column({ type: 'text', nullable: true }) waitingForEvent: string | null;
   @Column({ type: 'timestamptz', nullable: true }) waitUntil: Date | null;
