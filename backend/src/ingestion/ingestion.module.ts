@@ -21,5 +21,6 @@ import { OutboxService } from './outbox.service';
     OutboxService,
     ApiKeyGuard,
   ],
+  exports: [IngestionService],
 })
 export class IngestionModule {}

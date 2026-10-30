@@ -170,7 +170,7 @@ export class WorkflowService {
              ELSE w.published_version_id END,
            updated_at = NOW()
        WHERE w.id = $1 AND w.account_id = $2
-         AND ($5::workflow_status IS NULL OR w.status = $5::workflow_status)
+         AND ($5::varchar IS NULL OR w.status = $5)
          AND ($3 <> 'active' OR $4 OR w.published_version_id IS NOT NULL)
        RETURNING id, name, status, published_version_id, updated_at`,
       [id, accountId, status, publishVersion, expectedStatus ?? null],

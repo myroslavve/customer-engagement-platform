@@ -25,6 +25,6 @@ import { AdminUsersService } from './admin-users.service';
   ],
   controllers: [AdminAuthController, AccountController, AdminUsersController],
   providers: [AdminAuthGuard, AdminAuthService, AccountService, AdminUsersService],
-  exports: [AdminAuthGuard, JwtModule],
+  exports: [AdminAuthGuard, AdminAuthService, JwtModule],
 })
 export class AuthModule {}

@@ -74,7 +74,7 @@ that did not reach the queue.
   account and its first admin, then returns `{ accessToken, account }`. One admin belongs to one
   account; there is no membership or account-switching flow. Emails are globally unique because
   login identifies the account by email.
-- `POST /admin/auth/login` — `{ email, password }` returns `{ accessToken }` (8 h).
+- `POST /admin/login` — `{ email, password }` returns `{ accessToken }` (8 h).
 - `GET /admin/auth/me` — current principal (`userId`, `accountId`, `email`, `role`).
 - `POST /admin/auth/password` — `{ currentPassword, newPassword }` returns a fresh
   `{ accessToken }`. It bumps the admin's token version, so the other sessions are rejected
@@ -96,6 +96,42 @@ upgrade, old application instances do not check token versions, so immediate tok
 guaranteed only after all old instances have been replaced. Do not route authenticated traffic to
 an older version after enabling token-version revocation.
 
+## Dev tools
+
+Test the engine end to end without the admin UI or a client product. `DEV_TOOLS_ENABLED=true`
+(local only: every `/dev` route answers 404 otherwise, and the config refuses the flag when
+`NODE_ENV=production`). Every route but bootstrap takes the admin bearer token. Runs are started
+through the real ingestion service (identify + track, idempotency, outbox, `events` queue), so the
+worker path is the one the public API uses.
+
+| Route | What it does |
+|---|---|
+| `POST /dev/bootstrap` (public) | `{ email?, password?, accountName? }` (defaults `dev@example.com` / `password123` / `Dev`): logs in or registers the admin, creates a fresh API key, the sample template and the active sample workflow (`item_viewed` → wait 24 h for `purchase` → reminder). Returns `{ accountId, accessToken, apiKey, templateId, workflowId }`. |
+| `GET /dev/scenarios` | Built-in scenarios: one workflow per node type and outcome, plus `everything`. Each has a `hint` on how to drive it. |
+| `POST /dev/scenarios/:name/run` | Creates the scenario's workflow once (trigger `dev.<name>`), then identifies a profile and tracks the trigger. Body (all optional): `{ userId, email, traits, properties, unsubscribed }`; a fresh `dev-<id>` user with `<userId>@example.com` by default, `email: null` for none. Returns `{ workflowId, userId, eventName, eventId, runId }` (`runId` null if no run started within 5 s). |
+| `POST /dev/workflows/run` | Same, for any definition: `{ definition, ...trigger body }`. Validated like `POST /admin/workflows`; a new workflow per call, its trigger event name replaced by a unique `dev.adhoc.<id>` (the trigger filter is kept and sees `properties`). |
+| `POST /dev/runs/:id/events` | `{ eventName, properties? }`: tracks an event as the run's profile, e.g. the `purchase` a wait node waits for. |
+| `POST /dev/runs/:id/fast-forward` | Runs the run's pending delay or wait timeout now. Returns `{ promoted }`. |
+| `GET /dev/runs?userId=&limit=`, `GET /dev/runs/:id` | Runs with their `steps` (node, cause, status, output) and `messages` (status, error, attempts). |
+| `GET /dev/queues` | Job counts per queue. |
+
+Scenarios: `send-email`, `branch` (`traits.plan == "pro"` sends), `delay` (1 h), `wait-for-event`
+(`purchase` with `amount > 0`, 1 day timeout), `missing-template` (the run fails), `everything`.
+
+```bash
+B=http://localhost:3000
+TOKEN=$(curl -s -X POST $B/dev/bootstrap -H 'content-type: application/json' -d '{}' | jq -r .accessToken)
+H=(-H "authorization: Bearer $TOKEN" -H 'content-type: application/json')
+
+RUN=$(curl -s -X POST $B/dev/scenarios/wait-for-event/run "${H[@]}" -d '{}' | jq -r .runId)
+curl -s -X POST $B/dev/runs/$RUN/events "${H[@]}" -d '{"eventName":"purchase","properties":{"amount":10}}'
+# or the timeout path: curl -s -X POST $B/dev/runs/$RUN/fast-forward "${H[@]}"
+curl -s $B/dev/runs/$RUN "${H[@]}" | jq '{status, steps: [.steps[] | .nodeId + ":" + .cause], messages: [.messages[].status]}'
+```
+
+The public ingestion API works too (`x-api-key` from bootstrap): tracking `item_viewed` starts the
+sample workflow.
+
 ## Queue processing
 
 The `events` worker starts runs and resumes waiting ones; the `workflow-steps` worker executes a run one
@@ -105,6 +141,9 @@ node per job and records each executed node in `run_steps`. `EVENTS_QUEUE_CONCUR
 (default 1000). A step job that exhausts its
 retries on a transient error stays in the BullMQ failed set and leaves the run where it was, so
 retrying the job resumes the run; only definition errors (missing node, no executor) fail the run.
+
+Status columns (`workflows`, `workflow_runs`, `run_steps`, `messages`) are `varchar`, not Postgres
+enums: the allowed values are the TypeScript enums in `src/enums/`, so a new status needs no migration.
 
 ## Email
 
@@ -116,7 +155,9 @@ worker concurrency.
 
 Emails go through Resend; `RESEND_API_KEY` and `EMAIL_FROM` are required. Locally a free account
 works with `EMAIL_FROM=onboarding@resend.dev`, which only delivers to the Resend account owner's
-address; deployments must set `EMAIL_FROM` to a sender on a verified domain. The Resend SDK prints its own `console.error` for every API error unless `NODE_ENV=production`.
+address; deployments must set `EMAIL_FROM` to a sender on a verified domain. Without a Resend account, point
+the SDK at a local stub of its API with `RESEND_BASE_URL=http://127.0.0.1:<port>` (any server that
+answers `POST /emails` with `{ "id": "..." }`, or a Resend error body `{ name, message, statusCode }`). The Resend SDK prints its own `console.error` for every API error unless `NODE_ENV=production`.
 
 Message statuses: `queued` → `sending` → `sent` | `failed`, or `skipped`. Reasons in `messages.error`:
 `no_email` / `unsubscribed` (skipped: the profile has no address or `profiles.unsubscribed_at` is set),

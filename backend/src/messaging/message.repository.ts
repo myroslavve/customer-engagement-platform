@@ -23,6 +23,10 @@ export class MessageRepository extends AbstractRepository<Message> {
     return this.findOne({ where: { runId, nodeId } }, transaction);
   }
 
+  findByRunId(runId: string, transaction?: Transaction): Promise<Message[]> {
+    return this.find({ where: { runId }, order: { createdAt: 'ASC' } }, transaction);
+  }
+
   /** INSERT ... ON CONFLICT (run_id, node_id) DO NOTHING, then select; the FK on template_id may throw. */
   async createIfAbsent(input: CreateMessageInput, transaction?: Transaction): Promise<Message> {
     await this.getRepository(transaction)

@@ -30,13 +30,8 @@ export class Message extends AbstractEntity {
   @Column({ type: 'text', nullable: true }) toEmail: string | null;
   @Column({ type: 'text', nullable: true }) subject: string | null;
   @Column({ type: 'jsonb' }) variables: RunContext;
-  @Column({
-    type: 'enum',
-    enum: MessageStatus,
-    enumName: 'message_status',
-    default: MessageStatus.Queued,
-  })
-  status: MessageStatus;
+  // varchar, not a PG enum: a new status must not need ALTER TYPE.
+  @Column({ type: 'varchar', default: MessageStatus.Queued }) status: MessageStatus;
   @Column({ type: 'text', nullable: true }) providerMessageId: string | null;
   @Column({ type: 'text', nullable: true }) error: string | null;
   @Column({ type: 'int', default: 0 }) attempts: number;

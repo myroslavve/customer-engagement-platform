@@ -41,6 +41,35 @@ export class RunRepository extends AbstractRepository<WorkflowRun> {
     return run ? { run, created: (insertResult.raw as unknown[]).length > 0 } : null;
   }
 
+  findForAccount(
+    id: string,
+    accountId: string,
+    transaction?: Transaction,
+  ): Promise<WorkflowRun | null> {
+    return this.findOne({ where: { id, accountId } }, transaction);
+  }
+
+  findByTriggerEvent(
+    workflowId: string,
+    triggerEventId: string,
+    transaction?: Transaction,
+  ): Promise<WorkflowRun | null> {
+    return this.findOne({ where: { workflowId, triggerEventId } }, transaction);
+  }
+
+  /** Newest first; all of the account's runs, or only the profile's when profileId is given. */
+  findRecent(
+    accountId: string,
+    profileId: string | undefined,
+    limit: number,
+    transaction?: Transaction,
+  ): Promise<WorkflowRun[]> {
+    return this.find(
+      { where: { accountId, profileId }, order: { createdAt: 'DESC' }, take: limit },
+      transaction,
+    );
+  }
+
   /**
    * Runs of the profile that this event may resume: waiting for eventName, or already claimed by
    * this very event on a previous attempt (claim key ends with eventClaimSuffix(eventId)).

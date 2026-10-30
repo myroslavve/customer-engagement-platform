@@ -8,9 +8,11 @@ import { EventsProcessor } from '../../src/event-processing/events.processor';
 import { EMAIL_PROVIDER } from '../../src/messaging/email-provider';
 import { EmailSendProcessor } from '../../src/messaging/email-send.processor';
 import { QUEUE_EMAIL_SEND, QUEUE_EVENTS, QUEUE_WORKFLOW_STEPS } from '../../src/queues/queue-names';
+import { RedisService } from '../../src/redis/redis.service';
 import { StepsProcessor } from '../../src/workflow-execution/steps.processor';
 import { truncateAll } from './database';
 import { FakeEmailProvider } from './fake-email-provider';
+import { HttpClient } from './http-client';
 import { obliterateQueues } from './queues';
 
 export type TestApp = {
@@ -18,6 +20,8 @@ export type TestApp = {
   dataSource: DataSource;
   fakeEmailProvider: FakeEmailProvider;
   get<T>(token: Type<T>): T;
+  /** Serves HTTP on a random port (once) and returns a client for it. */
+  http(): Promise<HttpClient>;
   /** Stops the queue's worker from taking jobs (they stay waiting/delayed); resumeQueue undoes it. */
   pauseQueue(queueName: string): Promise<void>;
   resumeQueue(queueName: string): void;
@@ -45,17 +49,30 @@ export async function createTestApp(): Promise<TestApp> {
   const workers = Object.values(PROCESSORS).map((processor) => app.get(processor).worker);
   const worker = (queueName: string) => app.get(PROCESSORS[queueName]).worker;
   const dataSource = app.get(DataSource);
+  let httpClient: HttpClient | undefined;
   return {
     app,
     dataSource,
     fakeEmailProvider,
     get: (token) => app.get(token),
+    http: async () => (httpClient ??= await listen(app)),
     // Not pause(true): that leaves the in-flight blocking fetch running, which still takes one job.
     pauseQueue: (queueName) => worker(queueName).pause(),
     resumeQueue: (queueName) => worker(queueName).resume(),
     reset: () => reset(app, dataSource, fakeEmailProvider, workers),
     close: () => app.close(),
   };
+}
+
+async function listen(app: INestApplication): Promise<HttpClient> {
+  await app.listen(0, '127.0.0.1');
+  return new HttpClient(await app.getUrl());
+}
+
+/** The 24 h ingestion messageId claims; they outlive the rows they guarded. */
+async function clearIdempotencyClaims(redisService: RedisService): Promise<void> {
+  const keys = await redisService.client.keys('idempotency:*');
+  if (keys.length > 0) await redisService.client.del(...keys);
 }
 
 /**
@@ -72,6 +89,7 @@ async function reset(
   await Promise.all(running.map((worker) => worker.pause()));
   try {
     await obliterateQueues(app);
+    await clearIdempotencyClaims(app.get(RedisService));
     await truncateAll(dataSource);
     fakeEmailProvider.reset();
   } finally {

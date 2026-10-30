@@ -24,6 +24,10 @@ Container_Boundary(api, "Application (API modules)") {
     Component(workflowsMod, "Workflows Module", "NestJS module", "Build, validate, publish versions, pause/resume.")
     Component(activityMod, "Activity Module", "NestJS module", "Events, runs, messages; per-user timeline.")
   }
+
+  Boundary(devApi, "Dev Tools API", "/dev/*  |  DEV_TOOLS_ENABLED only, JWT except bootstrap", $tags="admin") {
+    Component(devToolsMod, "Dev Tools Module", "NestJS module", "POST /dev/bootstrap (admin, API key, sample workflow)\nGET /dev/scenarios, POST /dev/scenarios/:name/run\nPOST /dev/workflows/run (ad-hoc definition)\nPOST /dev/runs/:id/events, /fast-forward\nGET /dev/runs[/:id], GET /dev/queues\n\nLocal manual testing; triggers through the Ingestion Module; 404 when disabled.")
+  }
 }
 
 ContainerDb(redis, "Redis", "BullMQ", "Queues, idempotency keys")
@@ -49,6 +53,13 @@ Rel(producer, redis, "queue.add(job)", "BullMQ")
 ' ---- admin path ----
 Rel(adminUi, adminApi, "Admin calls", "REST/JSON, JWT")
 Rel(adminApi, pg, "Reads / writes config & activity", "SQL")
+
+' ---- dev tools (local only) ----
+Lay_D(adminApi, devApi)
+Rel(devToolsMod, adminApi, "Bootstrap through auth, templates, workflows services")
+Rel(devToolsMod, ingestMod, "identify / track (scenario triggers, events)")
+Rel(devToolsMod, pg, "Reads runs, steps, messages", "SQL")
+Rel(devToolsMod, redis, "Job counts, promote delayed step jobs", "BullMQ")
 
 SHOW_LEGEND()
 @enduml

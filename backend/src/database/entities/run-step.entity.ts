@@ -19,7 +19,8 @@ export class RunStep extends AbstractEntity {
   // text, not a PG enum: new node kinds must not need ALTER TYPE.
   @Column({ type: 'text', nullable: true }) nodeType: NodeType | null;
   @Column('text') cause: StepCause;
-  @Column({ type: 'enum', enum: RunStepStatus, enumName: 'run_step_status' }) status: RunStepStatus;
+  // varchar, not a PG enum: a new status must not need ALTER TYPE.
+  @Column('varchar') status: RunStepStatus;
   @Column({ type: 'jsonb', nullable: true }) output: RunStepOutput | null;
   @Column({ type: 'text', nullable: true }) error: string | null;
 }
