@@ -96,9 +96,9 @@ describe('ResendEmailProvider', () => {
     expect(serverError).not.toBeInstanceOf(EmailSendError);
 
     reply = resendError(409, 'concurrent_idempotent_requests');
-    expect(await provider.send(EMAIL).catch((error: unknown) => error)).not.toBeInstanceOf(
-      EmailSendError,
-    );
+    const concurrent = await provider.send(EMAIL).catch((error: unknown) => error);
+    expect(concurrent).toBeInstanceOf(Error);
+    expect(concurrent).not.toBeInstanceOf(EmailSendError);
 
     process.env.RESEND_BASE_URL = 'http://127.0.0.1:1';
     const unreachable = await createProvider()

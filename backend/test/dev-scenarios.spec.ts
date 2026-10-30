@@ -53,8 +53,13 @@ describe('dev scenarios', () => {
         FINAL_RUN.has(run.status) &&
         run.messages.every((message) => FINAL_MESSAGE.has(message.status)),
     );
+  /** The step job is queued just after the run row commits, so retry until it is promoted. */
   const fastForward = (runId: string) =>
-    http.post<{ promoted: number }>(`/dev/runs/${runId}/fast-forward`, undefined, { token });
+    waitFor(
+      () =>
+        http.post<{ promoted: number }>(`/dev/runs/${runId}/fast-forward`, undefined, { token }),
+      (response) => response.body.promoted > 0,
+    );
   const sendEvent = (runId: string, eventName: string, properties: Record<string, unknown>) =>
     http.post(`/dev/runs/${runId}/events`, { eventName, properties }, { token });
   const path = (run: RunDetails) => run.steps.map((step) => `${step.nodeId}:${step.cause}`);

@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { TemplateService } from '../admin/template.service';
 import { WorkflowService } from '../admin/workflow.service';
 import { WorkflowDefinition as AdminWorkflowDefinition } from '../admin/workflow.types';
+import { WorkflowStatus } from '../enums/workflow-status.enum';
 import { WorkflowDefinition } from '../types/workflow-definition.types';
 import { SAMPLE_TEMPLATE, SAMPLE_TEMPLATE_NAME } from './dev-samples';
 
-type NamedRow = { id: string; name: string };
+type NamedRow = { id: string; name: string; status?: WorkflowStatus };
 
 /**
  * Templates and workflows the dev tools create, through the admin services, so the same validation
@@ -35,8 +36,11 @@ export class DevFixturesService {
   ): Promise<string> {
     const workflows = (await this.workflowService.list(accountId)) as NamedRow[];
     const existing = workflows.find((workflow) => workflow.name === name);
-    if (existing) return existing.id;
-    return this.createWorkflow(accountId, name, definition);
+    if (!existing) return this.createWorkflow(accountId, name, definition);
+    if (existing.status !== WorkflowStatus.Active) {
+      await this.workflowService.publish(accountId, existing.id);
+    }
+    return existing.id;
   }
 
   /** Creates and publishes; an invalid definition is a 400 from the admin validation. */

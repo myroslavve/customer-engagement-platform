@@ -106,9 +106,14 @@ describe('dev tools', () => {
       ).body;
 
       // The sample waits a day; fast-forward fires the timeout now.
-      const forwarded = await http.post(`/dev/runs/${waiting.id}/fast-forward`, undefined, {
-        token,
-      });
+      // The step job is queued just after the run row commits, so retry until it is promoted.
+      const forwarded = await waitFor(
+        () =>
+          http.post<{ promoted: number }>(`/dev/runs/${waiting.id}/fast-forward`, undefined, {
+            token,
+          }),
+        (response) => response.body.promoted > 0,
+      );
       expect(forwarded).toEqual({ status: 200, body: { promoted: 1 } });
 
       const run = await waitFor(
